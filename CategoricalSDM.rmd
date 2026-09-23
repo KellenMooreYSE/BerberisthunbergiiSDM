@@ -1,1 +1,708 @@
+---
+title: "Categorical SDM Modeling Condensed"
+author: "Kellen Moore"
+date: "2026-09-09"
+output: pdf_document
+---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+``` {r, Packages and RDATA}
+
+# install.packages("biomod2", dependencies = TRUE)
+# install.packages('caret')
+# install.packages("cluster")
+# install.packages("clustree")
+# install.packages("corrplot")
+# install.packages("data.table")
+# install.packages("dplyr")
+# install.packages("GGally")
+# install.packages("ggplot2")
+# install.packages("gtools")
+# install.packages("lattice")
+# install.packages("lme4")
+# install.packages("lmtest")
+# install.packages("MASS")
+# install.packages("nnet")
+# install.packages("performance")
+# install.packages("PerformanceAnalytics")
+# install.packages("pscl")
+# install.packages("randomForest")
+# install.packages("raster")
+# install.packages("readr")
+# install.packages("reshape2")
+# install.packages("sf")
+# install.packages("terra")
+# install.packages("tidyterra")
+# install.packages("tidyverse")
+# install.packages("tigris")
+# install.packages("vegan")
+# install.packages("vegan3d")
+# install.packages("vcd")
+# install.packages("VGAM")
+# install.packages("zoo")
+
+library(biomod2)
+library(caret)
+library(cluster)
+library(clustree)
+library(corrplot)
+library(data.table)
+library(dplyr)
+library(GGally)
+library(ggplot2)
+library(gtools)
+library(lattice)
+library(lme4)
+library(lmtest)
+library(MASS)
+library(nnet)
+library(performance)
+library(PerformanceAnalytics)
+library(pscl)
+library(randomForest)
+library(raster)
+library(readr)
+library(reshape2)
+library(sf)
+library(terra)
+library(tidyterra)
+library(tidyverse)
+library(tigris)
+library(vegan)
+library(vegan3d)
+library(vcd)
+library(VGAM)
+library(zoo)
+
+load("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/RStudio/Projects/JBPlotsStats")
+load("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/RStudio/Projects/BioMOD_RDATA")
+JB_CV_Splits.b <- readRDS('JB_CV_Splits_b.rds')
+
+```
+
+``` {r, Explanatory Raster Uploads}
+
+#####
+CT <- st_read("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Resources/Shapefiles/Connecticut Mainland/Connecticut_No_Water.shp")
+
+CT <- st_transform(CT, "EPSG:6434")
+CT_extent <- ext(CT)
+# Convert sf to SpatVector
+CT_vect <- terra::vect(CT)
+# Get its extent properly
+CT_extent <- terra::ext(CT_vect)
+
+names(CT)
+plot(CT$geometry)
+
+#####
+Elevation <- terra::rast("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/New Ecological Conditions GIS Data/Elevation/Elevation.tif")
+
+Elevation <- project(Elevation, "EPSG:6434")
+Elevation <- crop(Elevation, CT_vect)
+Elevation <- mask(Elevation, CT_vect)
+
+Elevation
+
+plot(Elevation)
+ggplot() + geom_spatraster(data=Elevation)
+
+# st_crs(CT) == crs(Elevation)
+# ext(CT) == ext(Elevation)
+# 
+# writeRaster(Elevation, "C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/RStudio/Projects/Elevation_Reprojection.tif", overwrite=TRUE)
+
+#####
+Local_Road_Proximity <- terra::rast("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/New Ecological Conditions GIS Data/CT Road Proximity/CT Roads 2026/Local_Road_Proximity.tif")
+
+Local_Road_Proximity <- project(Local_Road_Proximity, "EPSG:6434")
+Local_Road_Proximity <- resample(Local_Road_Proximity, Elevation)
+Local_Road_Proximity <- crop(Local_Road_Proximity, CT_vect)
+Local_Road_Proximity <- mask(Local_Road_Proximity, CT_vect)
+
+Local_Road_Proximity
+
+plot(Local_Road_Proximity)
+ggplot() + geom_spatraster(data=Local_Road_Proximity)
+
+crs(Local_Road_Proximity) == crs(Elevation)
+ext(Local_Road_Proximity) == ext(Elevation)
+res(Local_Road_Proximity)  == res(Elevation)
+
+#####
+Trail_Proximity <- terra::rast("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/New Ecological Conditions GIS Data/CT Road Proximity/CT Roads 2026/Trail_Proximity.tif")
+
+Trail_Proximity <- project(Trail_Proximity, "EPSG:6434")
+Trail_Proximity <- resample(Trail_Proximity, Elevation)
+Trail_Proximity <- crop(Trail_Proximity, CT_vect)
+Trail_Proximity <- mask(Trail_Proximity, CT_vect)
+
+Trail_Proximity
+
+plot(Trail_Proximity)
+ggplot() + geom_spatraster(data=Trail_Proximity)
+
+crs(Trail_Proximity) == crs(Elevation)
+ext(Trail_Proximity) == ext(Elevation)
+res(Trail_Proximity)  == res(Elevation)
+
+#####
+Soil_Farm_Class <- terra::rast("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/New Ecological Conditions GIS Data/CT Soils Farm Class/CT_Soils_Farm_Class.tif")
+
+Soil_Farm_Class <- project(Soil_Farm_Class, "EPSG:6434")
+Soil_Farm_Class <- resample(Soil_Farm_Class, Elevation)
+Soil_Farm_Class <- crop(Soil_Farm_Class, CT_vect)
+Soil_Farm_Class <- mask(Soil_Farm_Class, CT_vect)
+
+Soil_Farm_Class
+
+plot(Soil_Farm_Class, legend = FALSE)
+ggplot() + geom_spatraster(data=Soil_Farm_Class)
+
+crs(Soil_Farm_Class) == crs(Elevation)
+ext(Soil_Farm_Class) == ext(Elevation)
+res(Soil_Farm_Class)  == res(Elevation)
+
+# writeRaster(Soil_Farm_Class, "C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/RStudio/Projects/Numeric_Soil_Farm_Class.tif", overwrite=TRUE)
+
+#####
+Soil_Water <- terra::rast("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/New Ecological Conditions GIS Data/Soil Water/Full Mosaicked Raster/Soil_Water_Masked_8.26.tif")
+
+Soil_Water <- project(Soil_Water, "EPSG:6434")
+Soil_Water <- resample(Soil_Water, Elevation)
+Soil_Water <- crop(Soil_Water, CT_vect)
+Soil_Water <- mask(Soil_Water, CT_vect)
+
+Soil_Water
+
+plot(Soil_Water)
+ggplot() + geom_spatraster(data=Soil_Water)
+
+crs(Soil_Water) == crs(Elevation)
+ext(Soil_Water) == ext(Elevation)
+res(Soil_Water)  == res(Elevation)
+
+Soil_Water[Soil_Water == 0] <- NA
+
+#####
+
+NDVI <- terra::rast("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/New Ecological Conditions GIS Data/NDVI/Mosaicked Raster/NDVI.tif")
+
+NDVI <- project(NDVI, "EPSG:6434")
+NDVI <- resample(NDVI, Elevation)
+NDVI <- crop(NDVI, CT_vect)
+NDVI <- mask(NDVI, CT_vect)
+
+NDVI
+
+plot(NDVI)
+ggplot() + geom_spatraster(data=NDVI)
+
+crs(NDVI) == crs(Elevation)
+ext(NDVI) == ext(Elevation)
+res(NDVI)  == res(Elevation)
+
+#####
+Water_Proximity <- terra::rast("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/New Ecological Conditions GIS Data/CT Water Proxmity/CT_Water_Proximity_Continous.tif")
+
+Water_Proximity <- project(Water_Proximity, "EPSG:6434")
+Water_Proximity <- resample(Water_Proximity, Elevation)
+Water_Proximity <- crop(Water_Proximity, CT_vect)
+Water_Proximity <- mask(Water_Proximity, CT_vect)
+
+Water_Proximity
+
+plot(Water_Proximity)
+ggplot() + geom_spatraster(data=Water_Proximity)
+
+crs(Water_Proximity) == crs(Elevation)
+ext(Water_Proximity) == ext(Elevation)
+res(Water_Proximity)  == res(Elevation)
+
+#####
+Land_Use_History <- terra::rast("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/New Ecological Conditions GIS Data/1934 Connecticut/CT_1934.tif")
+
+Land_Use_History <- project(Land_Use_History, "EPSG:6434")
+Land_Use_History <- resample(Land_Use_History, Elevation)
+Land_Use_History <- crop(Land_Use_History, CT_vect)
+Land_Use_History <- mask(Land_Use_History, CT_vect)
+
+Land_Use_History
+
+plot(Land_Use_History, legend = FALSE)
+ggplot() + geom_spatraster(data=Land_Use_History)
+
+crs(Land_Use_History) == crs(Elevation)
+ext(Land_Use_History) == ext(Elevation)
+res(Land_Use_History)  == res(Elevation)
+
+# writeRaster(Land_Use_History, "C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/RStudio/Projects/Numeric_Land_Use_History.tif", overwrite=TRUE)
+
+#####
+Land_Cover <- terra::rast("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/New Ecological Conditions GIS Data/CT Land Cover/land_cover")
+
+# Land_Cover <- terra::rast("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/New Ecological Conditions GIS Data/CT Land Cover/2016_Reclassified_Land_Cover.tif")
+# #
+Land_Cover <- project(Land_Cover, "EPSG:6434")
+Land_Cover <- resample(Land_Cover, Elevation)
+Land_Cover <- crop(Land_Cover, CT_vect)
+Land_Cover <- mask(Land_Cover, CT_vect)
+
+Land_Cover
+
+plot(Land_Cover, legend = FALSE)
+ggplot() + geom_spatraster(data=Land_Cover)
+
+crs(Land_Cover) == crs(Elevation)
+ext(Land_Cover) == ext(Elevation)
+res(Land_Cover)  == res(Elevation)
+
+# writeRaster(Canopy_Cover, "C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/RStudio/Projects/2016_Land_Cover_Numeric.tif", overwrite=TRUE)
+
+#####
+# Canopy_Cover <- terra::rast("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/New Ecological Conditions GIS Data/CT Land Cover/Canopy_Cover.tif")
+# 
+# Canopy_Cover <- project(Canopy_Cover, "EPSG:6434")
+# Canopy_Cover <- resample(Canopy_Cover, Elevation)
+# Canopy_Cover <- crop(Canopy_Cover, CT_vect)
+# Canopy_Cover <- mask(Canopy_Cover, CT_vect)
+# 
+# Canopy_Cover
+# 
+# plot(Canopy_Cover, legend = FALSE)
+# ggplot() + geom_spatraster(data=Canopy_Cover)
+# 
+# crs(Canopy_Cover) == crs(Elevation)
+# ext(Canopy_Cover) == ext(Elevation)
+# res(Canopy_Cover)  == res(Elevation)
+
+#####
+
+```
+
+``` {r, Raster Download & Coordinates/Explanatory Variable Creation (RUN IF NEEDED)}
+
+JB.expl_raster <- c(Land_Use_History,
+                    Local_Road_Proximity,
+                    Trail_Proximity,
+                    Soil_Farm_Class,
+                    Water_Proximity,
+                    Elevation,
+                    Land_Cover)
+                    # NDVI)
+                    # Soil_Water)
+
+#####                    
+JB_Entry_Data <- JBPlotsStats %>% dplyr::select("Latitude",
+                                                "Longitude",
+                                                "Abundance",
+                                                "GT_Cat")
+
+JB_Biomod_Data.Sorted <- JB_Entry_Data
+JB_Biomod_Data.Sorted$GT_Cat <- as.numeric(JB_Biomod_Data.Sorted$GT_Cat)
+
+avg_row2 <- as.data.frame(t(colMeans(JB_Biomod_Data.Sorted[c(39, 40), ])))
+JB_Biomod_Data.Sorted <- JB_Biomod_Data.Sorted[-39:-40,]
+
+avg_row1 <- as.data.frame(t(colMeans(JB_Biomod_Data.Sorted[c(20, 21), ])))
+JB_Biomod_Data.Sorted <- JB_Biomod_Data.Sorted[-20:-21,]
+
+JB_Biomod_Data.Sorted <- rbind(JB_Biomod_Data.Sorted[1:19,], avg_row1, JB_Biomod_Data.Sorted[20:nrow(JB_Biomod_Data.Sorted), ])
+
+JB_Biomod_Data.Sorted <- rbind(JB_Biomod_Data.Sorted[1:37,], avg_row2, JB_Biomod_Data.Sorted[38:nrow(JB_Biomod_Data.Sorted), ])
+
+
+# JB_Biomod_Data.Sorted <- JB_Biomod_Data.Sorted[-161:-162,]
+# JB_Biomod_Data.Sorted <- JB_Biomod_Data.Sorted[-105,]
+
+JB_Biomod_Data.Sorted$GT_Cat <- ifelse(JB_Biomod_Data.Sorted$GT_Cat == 1, 0,
+               ifelse(JB_Biomod_Data.Sorted$GT_Cat == 2, 1,
+                ifelse(JB_Biomod_Data.Sorted$GT_Cat == 3, 2,
+                ifelse(JB_Biomod_Data.Sorted$GT_Cat == 4, 3, NA))))
+JB_Biomod_Data.Sorted$GT_Cat <- factor(JB_Biomod_Data.Sorted$GT_Cat, ordered = TRUE, levels = c("0", "1", "2", "3"))
+
+str(JB_Biomod_Data.Sorted)
+
+JB_Points.sf <- st_as_sf(JB_Biomod_Data.Sorted,
+                         coords = c('Longitude', 'Latitude'),
+                         crs    = 4326)  
+
+JB_Points.Reprojected <- st_transform(JB_Points.sf, 
+                                      crs = "EPSG:6434")
+
+JB_Biomod_Data.Sorted[, 1:2] <- as.data.frame(st_coordinates(JB_Points.Reprojected))
+
+JB_Coordinates <- JB_Biomod_Data.Sorted[, 1:2]
+
+head(JB_Coordinates)
+head(JB_Biomod_Data.Sorted[, 1:2])
+
+rm(JB_Points.Reprojected, JB_Points.sf, avg_row1, avg_row2, JB_Entry_Data)
+
+```
+
+``` {r, Categorical BioMod Data Formatting, echo=FALSE}
+
+JB_Biomod_Eval_Data.C <- BIOMOD_FormatingData(resp.name = "Berberis thunbergii",
+                                              resp.var = JB_Biomod_Data.Sorted$GT_Cat,
+                                              resp.xy = JB_Coordinates,
+                                              expl.var = JB.expl_raster,
+                                              eval.resp.var = JB_Biomod_Data.Sorted$GT_Cat,
+                                              eval.resp.xy = JB_Coordinates,
+                                              eval.expl.var = JB.expl_raster,
+                                              data.type = 'ordinal')
+
+
+print(JB_Biomod_Eval_Data.C)
+summary(JB_Biomod_Eval_Data.C)
+plot(JB_Biomod_Eval_Data.C)
+
+```
+
+``` {r, BioMod2 Occurrence Cross Validation, echo=FALSE}
+
+# set.seed(392)
+# JB_Cat_Biomod_CrossValidation.b <- bm_CrossValidation(bm.format = JB_Biomod_Eval_Data.C,
+#                                                        strategy = 'random',
+#                                                        nb.rep = 5,
+#                                                        perc = 0.7,
+#                                                        do.full.models = TRUE)
+set.seed(392)
+JB_Cat_Biomod_CrossValidation.b <- bm_CrossValidation(bm.format = JB_Biomod_Eval_Data.C,
+                                                       strategy = 'block',
+                                                       k = 4,
+                                                       nb.rep = 1,
+                                                       do.full.models = TRUE)      # include _allData_allRun column)
+
+print(JB_Cat_Biomod_CrossValidation.b)
+# summary(JB_Biomod_Eval_Data.C, calib.lines = JB_Cat_Biomod_CrossValidation.b)
+
+JB_CV_Splits.b <- JB_Cat_Biomod_CrossValidation.b
+saveRDS(JB_CV_Splits.b, 'JB_CV_Splits_b.rds')
+
+plot(JB_Biomod_Eval_Data.C, calib.lines = JB_Cat_Biomod_CrossValidation.b)
+
+```
+
+``` {r, User Defined Model Options}
+
+JB_Cat_Models <- c('GLM', 'RF', 'XGBOOST', 'MARS', 'GAM')
+
+user.MARS <-  list('for_all_datasets' = list(degree = 3, 
+                                             nk = 50,  
+                                             penalty = 1, 
+                                             thresh = 0.0001)) 
+
+# user.GBM <- list('_allData_allRun' = list(n.trees = 500,
+#                                            interaction.depth = 2,
+#                                            shrinkage = 0.01,
+#                                            n.minobsinnode = 5,
+#                                            bag.fraction = 0.5))
+# 
+# user.RF <- list('for_all_datasets' = list(ntree  = 500,
+#                                           mtry   = 1))
+
+user.val <- list(MARS.ordinal.earth.earth = user.MARS)
+
+user.opt <- bm_ModelingOptions(data.type = 'ordinal',
+                            models = JB_Cat_Models,
+                            strategy = 'user.defined',
+                            user.base = 'default',
+                            user.val = user.val,
+                            bm.format = JB_Biomod_Eval_Data.C)
+
+user.opt@options[["RF.ordinal.randomForest.randomForest"]]@args.values[['_allData_allRun']]$ntree = 500
+
+```
+
+``` {r, Occurrence BioMod Creation}
+
+Model_Id <- c('Model.id')
+
+set.seed(392) #RUN WITH MODEL EACH TIME!!!!!!!!!
+JB_Categorical_Biomod_Model <- BIOMOD_Modeling(bm.format = JB_Biomod_Eval_Data.C,
+                                             modeling.id = Model_Id,
+                                             models = c('GLM', 'RF', 'MARS', 'GAM'),
+                                             CV.strategy = 'user.defined',
+                                             CV.user.table = JB_CV_Splits.b,
+                                             OPT.strategy = 'user.defined',
+                                             OPT.user = user.opt,
+                                             metric.eval = c('Accuracy',
+                                                             'Recall',
+                                                             'Precision',
+                                                             'F1'),
+                                             var.import = 10,
+                                             seed.val = 392)
+
+JB_Categorical_Biomod_Model
+print(JB_Categorical_Biomod_Model)
+summary(JB_Categorical_Biomod_Model)
+
+#####
+# Run to ensure reproducibility
+# set.seed(392)
+# JB_Categorical_Biomod_Model.reprod <- BIOMOD_Modeling(bm.format = JB_Biomod_Eval_Data.C,
+                                             # modeling.id = Model_Id,
+                                             # models = c('GLM', 'RF', 'XGBOOST', 'MARS', 'GAM'),
+                                             # CV.strategy = 'user.defined',
+                                             # CV.user.table = JB_CV_Splits.b,
+                                             # OPT.strategy = 'user.defined',
+                                             # OPT.user = user.opt,
+                                             # metric.eval = c('Accuracy',
+                                             #                 'Recall',
+                                             #                 'Precision',
+                                             #                 'F1'),
+                                             # var.import = 10,
+                                             # seed.val = 392)
+
+# 
+# Eval_Run.1 <- get_evaluations(JB_Categorical_Biomod_Model)
+# Eval_Run.2 <- get_evaluations(JB_Categorical_Biomod_Model.reprod)
+# identical(Eval_Run.1, Eval_Run.2)
+# 
+# VarImpor_Run.1 <- get_variables_importance(JB_Categorical_Biomod_Model)
+# VarImpor_Run.2 <- get_variables_importance(JB_Categorical_Biomod_Model.reprod)
+# identical(VarImpor_Run.1, VarImpor_Run.2)
+# 
+# Pred_Run.1 <- get_predictions(JB_Categorical_Biomod_Model)
+# Pred_Run.2 <- get_predictions(JB_Categorical_Biomod_Model.reprod)
+# identical(Pred_Run.1, Pred_Run.2)
+
+```
+
+``` {r, Occurrence BioMod Data}
+
+#Data Given To Model
+get_formal_data(JB_Categorical_Biomod_Model)
+get_calib_lines(JB_Categorical_Biomod_Model)
+get_options(JB_Categorical_Biomod_Model)
+
+#Information About The Model
+#sp (species name), PA (data type [all vs PA]), run, algo (model type)
+get_built_models(JB_Categorical_Biomod_Model)
+# get_built_models(JB_Categorical_Biomod_Model, algo = 'RF')
+
+#Results From Model
+get_predictions(JB_Categorical_Biomod_Model)
+get_predictions(JB_Categorical_Biomod_Model, model.as.col = TRUE)
+
+Categorical_BioMod_Predictions <- as.data.frame(get_predictions(JB_Categorical_Biomod_Model, model.as.col = TRUE))
+Categorical_BioMod_Predictions <- cbind(JB_Biomod_Data.Sorted, Categorical_BioMod_Predictions)
+write.csv(Categorical_BioMod_Predictions, "C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/Data Tables/Prediction Tables/Categorical_BioMod_Predictions.csv", row.names = TRUE)
+
+
+get_evaluations(JB_Categorical_Biomod_Model)
+
+Categorical_BioMod_Evaluations <- as.data.frame(get_evaluations(JB_Categorical_Biomod_Model))
+write.csv(Categorical_BioMod_Evaluations, "C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/Data Tables/Prediction Tables/Categorical_BioMod_Evaluations.csv", row.names = TRUE)
+
+get_variables_importance(JB_Categorical_Biomod_Model)
+
+Categorical_BioMod_VarImportance <- as.data.frame(get_variables_importance(JB_Categorical_Biomod_Model))
+write.csv(Categorical_BioMod_VarImportance, "C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/Data Tables/Prediction Tables/Categorical_BioMod_VarImportance.csv", row.names = TRUE)
+
+```
+
+```{r, Abundance Plots, echo=FALSE}
+
+#Group By is ordered by x-axis, legend, plot subset
+
+#####
+# Evaluations
+bm_PlotEvalBoxplot(bm.out = JB_Categorical_Biomod_Model,
+                   dataset = 'calibration',
+                   group.by = c('algo', 'algo'))
+
+bm_PlotEvalBoxplot(bm.out = JB_Categorical_Biomod_Model,
+                   dataset = 'validation',
+                   group.by = c('algo', 'algo'))
+
+bm_PlotEvalBoxplot(bm.out = JB_Categorical_Biomod_Model,
+                   dataset = 'validation',
+                   group.by = c('run', 'algo'))
+
+#####
+# Variable Importance
+bm_PlotVarImpBoxplot(bm.out = JB_Categorical_Biomod_Model,
+                     group.by = c('expl.var', 'algo', 'algo'))
+
+bm_PlotVarImpBoxplot(bm.out = JB_Categorical_Biomod_Model,
+                     group.by = c('run', 'algo', 'expl.var'))
+
+#####
+# Response Curves (GLM, GAM)
+get_built_models(JB_Categorical_Biomod_Model)
+Categorical_RC_Model1 <- get_built_models(JB_Categorical_Biomod_Model, full.name = NULL, PA = NULL, run = 'allRun', algo = c('GLM', 'GAM'))
+
+JB_Response_Curves1 <- bm_PlotResponseCurves(bm.out = JB_Categorical_Biomod_Model,
+                      models.chosen = Categorical_RC_Model1,
+                      fixed.var = 'median')
+
+short_lab <- setNames(
+  sub(".*_", "", Categorical_RC_Model1),  # "GLM", "RF", "GBM", "MARS", ...
+  Categorical_RC_Model1                   # names are the long model IDs
+)
+
+JB_Response_Curves1$plot +
+  scale_color_manual(
+    values = c(
+      'Berberis.thunbergii_allData_RUN1_GLM'  = 'pink',
+      'Berberis.thunbergii_allData_RUN2_GLM'  = 'pink',
+      'Berberis.thunbergii_allData_RUN3_GLM'  = 'pink',
+      'Berberis.thunbergii_allData_RUN4_GLM'  = 'pink',
+      'Berberis.thunbergii_allData_RUN5_GLM' = 'pink',
+      'Berberis.thunbergii_allData_allRun_GLM'  = 'red'
+      # 'Berberis.thunbergii_allData_RUN1_XGBOOST'  = 'lightgreen',
+      # 'Berberis.thunbergii_allData_RUN2_XGBOOST'  = 'lightgreen',
+      # 'Berberis.thunbergii_allData_RUN3_XGBOOST'  = 'lightgreen',
+      # 'Berberis.thunbergii_allData_RUN4_XGBOOST'  = 'lightgreen',
+      # 'Berberis.thunbergii_allData_RUN5_XGBOOST' = 'lightgreen',
+      # 'Berberis.thunbergii_allData_allRun_XGBOOST'  = 'green4',
+      'Berberis.thunbergii_allData_RUN1_GAM'  = 'plum2',
+      'Berberis.thunbergii_allData_RUN2_GAM'  = 'plum2',
+      'Berberis.thunbergii_allData_RUN3_GAM'  = 'plum2',
+      'Berberis.thunbergii_allData_RUN4_GAM'  = 'plum2',
+      'Berberis.thunbergii_allData_RUN5_GAM' = 'plum2',
+      'Berberis.thunbergii_allData_allRun_GAM'  = 'magenta2'
+    ),
+    breaks = Categorical_RC_Model1,                   
+    labels = unname(short_lab[Categorical_RC_Model1])) +
+  geom_line(linewidth = 1.0)
+
+#####
+# Response Levels (RF, MARS)
+get_built_models(JB_Categorical_Biomod_Model)
+Categorical_RC_Model2 <- get_built_models(JB_Categorical_Biomod_Model, full.name = NULL, PA = NULL, run = 'allRun', algo = c('RF', 'MARS'))
+
+JB_Response_Curves2 <- bm_PlotResponseCurves(bm.out = JB_Categorical_Biomod_Model,
+                      models.chosen = Categorical_RC_Model2,
+                      fixed.var = 'median')
+
+short_lab <- setNames(
+  sub(".*_", "", Categorical_RC_Model2),  # "GLM", "RF", "GBM", "MARS", ...
+  Categorical_RC_Model2                   # names are the long model IDs
+)
+
+JB_Response_Curves2$plot +
+  scale_color_manual(
+    values = c(
+      'Berberis.thunbergii_allData_RUN1_RF'   = 'skyblue',
+      'Berberis.thunbergii_allData_RUN2_RF'   = 'skyblue',
+      'Berberis.thunbergii_allData_RUN3_RF'   = 'skyblue',
+      'Berberis.thunbergii_allData_RUN4_RF'   = 'skyblue',
+      'Berberis.thunbergii_allData_RUN5_RF' = 'skyblue',
+      'Berberis.thunbergii_allData_allRun_RF'   = 'blue',
+      # 'Berberis.thunbergii_allData_RUN1_XGBOOST'  = 'lightgreen',
+      # 'Berberis.thunbergii_allData_RUN2_XGBOOST'  = 'lightgreen',
+      # 'Berberis.thunbergii_allData_RUN3_XGBOOST'  = 'lightgreen',
+      # 'Berberis.thunbergii_allData_RUN4_XGBOOST'  = 'lightgreen',
+      # 'Berberis.thunbergii_allData_RUN5_XGBOOST' = 'lightgreen',
+      # 'Berberis.thunbergii_allData_allRun_XGBOOST'  = 'green4',
+      # 'Berberis.thunbergii_allData_RUN1_MARS' = 'peachpuff2',
+      'Berberis.thunbergii_allData_RUN2_MARS' = 'peachpuff2',
+      'Berberis.thunbergii_allData_RUN3_MARS' = 'peachpuff2',
+      'Berberis.thunbergii_allData_RUN4_MARS' = 'peachpuff2',
+      'Berberis.thunbergii_allData_RUN5_MARS' = 'peachpuff2',
+      'Berberis.thunbergii_allData_allRun_MARS' = 'orange'
+    ),
+    breaks = Categorical_RC_Model2,                   
+    labels = unname(short_lab[Categorical_RC_Model2])) +
+  geom_line(linewidth = 1.0)
+
+#####
+# Model Metrics
+Categorical_RC_Model <- get_built_models(JB_Categorical_Biomod_Model, full.name = NULL, PA = NULL, run = NULL, algo = 'GLM')
+
+GLM <- bm_ModelAnalysis(bm.mod = JB_Categorical_Biomod_Model,
+                 models.chosen = Categorical_RC_Model)
+
+Categorical_RC_Model <- get_built_models(JB_Categorical_Biomod_Model, full.name = NULL, PA = NULL, run = NULL, algo = 'RF')
+
+RF <- bm_ModelAnalysis(bm.mod = JB_Categorical_Biomod_Model,
+                 models.chosen = Categorical_RC_Model)
+
+# Categorical_RC_Model <- get_built_models(JB_Categorical_Biomod_Model, full.name = NULL, PA = NULL, run = NULL, algo = 'XGBOOST')
+# 
+# XGBOOST <- bm_ModelAnalysis(bm.mod = JB_Categorical_Biomod_Model,
+#                  models.chosen = Categorical_RC_Model)
+
+Categorical_RC_Model <- get_built_models(JB_Categorical_Biomod_Model, full.name = NULL, PA = NULL, run = NULL, algo = 'MARS')
+
+MARS <- bm_ModelAnalysis(bm.mod = JB_Categorical_Biomod_Model,
+                 models.chosen = Categorical_RC_Model)
+
+Categorical_RC_Model <- get_built_models(JB_Categorical_Biomod_Model, full.name = NULL, PA = NULL, run = NULL, algo = 'GAM')
+
+GAM <- bm_ModelAnalysis(bm.mod = JB_Categorical_Biomod_Model,
+                 models.chosen = Categorical_RC_Model[5])
+
+Categorical_RC_Model <- get_built_models(JB_Categorical_Biomod_Model, full.name = NULL, PA = NULL, run = 'allRun', algo = NULL)
+
+ALL <- bm_ModelAnalysis(bm.mod = JB_Categorical_Biomod_Model,
+                 models.chosen = Categorical_RC_Model)
+
+```
+
+``` {r, Spatial Projection}
+
+JB_Categorical_Projection <- BIOMOD_Projection(bm.mod    = JB_Categorical_Biomod_Model,     
+                                             proj.name = "BioMod_Projections",          
+                                             new.env   = JB.expl_raster,               
+                                             models.chosen = 'all',                    
+                                             metric.binary = NULL,                      
+                                             metric.filter = NULL,
+                                             build.clamping.mask = TRUE)    
+
+plot(JB_Categorical_Projection)
+
+get_built_models(JB_Categorical_Biomod_Model)
+Categorical_Ensemble_Models <- get_built_models(JB_Categorical_Biomod_Model, full.name = NULL, PA = NULL, run = NULL, algo = NULL)
+# Occurrence_Ensemble_Models <- Occurrence_Ensemble_Models[c(-14)]
+
+JB_Ensemble_Model.C <- BIOMOD_EnsembleModeling(bm.mod = JB_Categorical_Biomod_Model,
+                                             models.chosen = 'all',
+                                             em.by = 'all',
+                                             metric.select = 'F1',
+                                             metric.eval   = c('Accuracy',
+                                                               'Recall',
+                                                               'Precision',
+                                                               'F1'))
+
+JB_Ensemble_Projection.C <- BIOMOD_EnsembleForecasting(bm.em = JB_Ensemble_Model.C,
+                                                     proj.name = "Ensemble_Current",
+                                                     new.env = JB.expl_raster,
+                                                     models.chosen = 'all')
+
+JB_Final_Categorical_Predictions <- get_predictions(JB_Ensemble_Projection.C)
+
+ggplot() + geom_spatraster(data=JB_Final_Categorical_Predictions)
+
+
+rcl_matrix <- matrix(c(NA,   NA,  0,
+                       0.0001,  1.5,  1,
+                       1.5,  2.5, 2,
+                       2.5, 4, 3),
+                     ncol = 3, byrow = TRUE)
+
+JB_Final_Categorical_Predictions.rcl <- classify(
+  JB_Final_Categorical_Predictions,
+  rcl = rcl_matrix
+)
+
+plot(JB_Final_Categorical_Predictions.rcl)
+ggplot() + geom_spatraster(data=JB_Final_Categorical_Predictions.rcl)
+
+
+writeRaster(JB_Final_Categorical_Predictions.rcl, "C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/RStudio/Projects/Final Predictive Rasters/JB_Final_Categorical_Predictions_9.9.3.tif", overwrite=TRUE)
+
+
+```
+
+``` {r, Save RDATA}
+
+save.image("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/RStudio/Projects/BioMOD_RDATA")
+
+```
