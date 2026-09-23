@@ -1,1 +1,147 @@
+---
+title: "JB Ground Truthing Stats"
+author: "Kellen Moore"
+date: "2026-09-11"
+output: pdf_document
+---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+``` {r, Packages and RDATA}
+
+# install.packages("biomod2", dependencies = TRUE)
+# install.packages('caret')
+# install.packages("cluster")
+# install.packages("clustree")
+# install.packages("corrplot")
+# install.packages("data.table")
+# install.packages("dplyr")
+# install.packages("GGally")
+# install.packages("ggplot2")
+# install.packages("gtools")
+# install.packages("lattice")
+# install.packages("lme4")
+# install.packages("lmtest")
+# install.packages("MASS")
+# install.packages("nnet")
+# install.packages("performance")
+# install.packages("PerformanceAnalytics")
+# install.packages("pscl")
+# install.packages("randomForest")
+# install.packages("raster")
+# install.packages("readr")
+# install.packages("reshape2")
+# install.packages("sf")
+# install.packages("terra")
+# install.packages("tidyterra")
+# install.packages("tidyverse")
+# install.packages("tigris")
+# install.packages("vegan")
+# install.packages("vegan3d")
+# install.packages("vcd")
+# install.packages("VGAM")
+# install.packages("zoo")
+
+library(biomod2)
+library(caret)
+library(cluster)
+library(clustree)
+library(corrplot)
+library(data.table)
+library(dplyr)
+library(GGally)
+library(ggplot2)
+library(gtools)
+library(lattice)
+library(lme4)
+library(lmtest)
+library(MASS)
+library(nnet)
+library(performance)
+library(PerformanceAnalytics)
+library(pscl)
+library(randomForest)
+library(raster)
+library(readr)
+library(reshape2)
+library(sf)
+library(terra)
+library(tidyterra)
+library(tidyverse)
+library(tigris)
+library(vegan)
+library(vegan3d)
+library(vcd)
+library(VGAM)
+library(zoo)
+
+load("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/Data Tables/JBFieldValidationStats.csv")
+```
+
+``` {r, Aggregation}
+
+Japanese_Barberry_FV_Sheet <- read_csv("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/Data Tables/2026 Japanese Barberry Data Sheet.csv")
+
+JB <- Japanese_Barberry_FV_Sheet[, -20]
+JB <- JB[, -17] #Choosing new abundance than old abundance
+JB <- JB[, -11:-13] #Removing redundant and non-data columns
+JB <- JB[, -8]
+JB <- JB[, -3:-4]
+
+JB <- JB[!is.na(JB$Occurrence), ]
+
+names(JB)
+names(JB)[names(JB) == "North Coordinate (Latitude)"] <- "Latitude"
+names(JB)[names(JB) == "West Coordinate (Longitude)"] <- "Longitude"
+names(JB)[names(JB) == "Longest Length (m)"] <- "Length"
+names(JB)[names(JB) == "Shortest Wdith (m)"] <- "Width"
+names(JB)[names(JB) == "Plant Area (m)"] <- "Plant_Area"
+names(JB)[names(JB) == "New Abundance"] <- "Abundance"
+
+JBFieldValidationStats <- JB %>%
+  group_by(PlotID) %>%
+  reframe(PlotID = unique(PlotID),
+          SiteID = unique(SiteID),
+          Block = unique(Block),
+          PlotID = unique(PlotID),
+          Latitude = unique(Latitude),
+          Longitude = unique(Longitude),
+          Occurrence = mean(Occurrence, na.rm = TRUE),
+          Distance = mean(Distance, na.rm = TRUE),
+          Length = mean(Length, na.rm = TRUE),
+          Width = mean(Width, na.rm = TRUE),
+          Plant_Area = mean(Plant_Area, na.rm = TRUE),
+          Abundance = mean(Abundance, na.rm = TRUE),
+          GT_Cat = mean(GT_Cat, na.rm = TRUE))
+          .groups = "drop"
+
+             
+JBFieldValidationStats$Occurrence <- ifelse(JBFieldValidationStats$Occurrence > 0, 1, 0)
+
+JBFieldValidationStats$GT_Cat <- ifelse(JBFieldValidationStats$Abundance == 0, 0,
+               ifelse(JBFieldValidationStats$Abundance > 0 & JBFieldValidationStats$Abundance < 5, 1,
+               ifelse(JBFieldValidationStats$Abundance >= 5 & JBFieldValidationStats$Abundance < 25, 2,
+               ifelse(JBFieldValidationStats$Abundance >= 25, 3, NA))))
+
+JBFieldValidationStats <- JBFieldValidationStats[, -3]
+
+JBFieldValidationStats$Abundance[JBFieldValidationStats$Abundance > 100] <- 100
+range(JBFieldValidationStats$Abundance)
+
+View(JBFieldValidationStats)
+length(unique(JBFieldValidationStats$PlotID))
+length(unique(JBFieldValidationStats$Latitude))
+length(unique(JBFieldValidationStats$Longitude))
+any(duplicated(JBFieldValidationStats$PlotID))
+
+JBFieldValidationStats$Occurrence <- factor(JBFieldValidationStats$Occurrence, ordered = TRUE, levels = c("0", "1"))
+JBFieldValidationStats$GT_Cat <- factor(JBFieldValidationStats$GT_Cat, ordered = TRUE, levels = c("0", "1", "2", "3"))
+str(JBFieldValidationStats)
+
+write.csv(JBFieldValidationStats, "C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/Data Tables/JBFieldValidationStats.csv", row.names = FALSE)
+
+rm(Japanese_Barberry_FV_Sheet, JB)
+
+```

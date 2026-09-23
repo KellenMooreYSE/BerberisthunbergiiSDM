@@ -1,1 +1,1761 @@
+---
+title: "JB Modeling Stats"
+output: pdf_document
+date: "2025-06-25"
+---
 
+```{r setup, include=FALSE}
+# knitr::opts_chunk$set(echo = TRUE)
+#Close all chunks using Alt+O
+
+#Copy Paste
+#C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis
+#C:/Users/km2695/
+#C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis
+#C:/Users/km2695/
+
+```
+
+``` {r, Packages and RDATA}
+
+# install.packages("biomod2", dependencies = TRUE)
+# install.packages('caret')
+# install.packages("cluster")
+# install.packages("clustree")
+# install.packages("corrplot")
+# install.packages("data.table")
+# install.packages("dplyr")
+# install.packages("GGally")
+# install.packages("ggplot2")
+# install.packages("gtools")
+# install.packages("lattice")
+# install.packages("lme4")
+# install.packages("lmtest")
+# install.packages("MASS")
+# install.packages("nnet")
+# install.packages("performance")
+# install.packages("PerformanceAnalytics")
+# install.packages("pscl")
+# install.packages("randomForest")
+# install.packages("raster")
+# install.packages("readr")
+# install.packages("reshape2")
+# install.packages("sf")
+# install.packages("terra")
+# install.packages("tidyterra")
+# install.packages("tidyverse")
+# install.packages("tigris")
+# install.packages("vegan")
+# install.packages("vegan3d")
+# install.packages("vcd")
+# install.packages("VGAM")
+# install.packages("zoo")
+
+library(biomod2)
+library(caret)
+library(cluster)
+library(clustree)
+library(corrplot)
+library(data.table)
+library(dplyr)
+library(GGally)
+library(ggplot2)
+library(gtools)
+library(lattice)
+library(lme4)
+library(lmtest)
+library(MASS)
+library(nnet)
+library(performance)
+library(PerformanceAnalytics)
+library(pscl)
+library(randomForest)
+library(raster)
+library(readr)
+library(reshape2)
+library(sf)
+library(terra)
+library(tidyterra)
+library(tidyverse)
+library(tigris)
+library(vegan)
+library(vegan3d)
+library(vcd)
+library(VGAM)
+library(zoo)
+
+load("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/RStudio/Projects/JBPlotsStats")
+```
+
+``` {r, Aggregation}
+
+Japanese_Barberry_Data_Sheet <- read_csv("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/Data Tables/2025 Japanese Barberry Data Sheet.csv")
+
+JB <- Japanese_Barberry_Data_Sheet[, -20]
+JB <- JB[, -17] #Choosing new abundance than old abundance
+JB <- JB[, -11:-13] #Removing redundant and non-data columns
+JB <- JB[, -8]
+JB <- JB[, -3:-4]
+
+JB <- JB[!is.na(JB$Occurrence), ]
+
+names(JB)
+names(JB)[names(JB) == "North Coordinate (Latitude)"] <- "Latitude"
+names(JB)[names(JB) == "West Coordinate (Longitude)"] <- "Longitude"
+names(JB)[names(JB) == "Longest Length (m)"] <- "Length"
+names(JB)[names(JB) == "Shortest Wdith (m)"] <- "Width"
+names(JB)[names(JB) == "Plant Area (m)"] <- "Plant_Area"
+names(JB)[names(JB) == "New Abundance"] <- "Abundance"
+
+JB_Model_Data <- JB %>%
+  group_by(PlotID) %>%
+  reframe(PlotID = unique(PlotID),
+          SiteID = unique(SiteID),
+          Block = unique(Block),
+          PlotID = unique(PlotID),
+          Latitude = unique(Latitude),
+          Longitude = unique(Longitude),
+          Occurrence = mean(Occurrence, na.rm = TRUE),
+          Distance = mean(Distance, na.rm = TRUE),
+          Length = mean(Length, na.rm = TRUE),
+          Width = mean(Width, na.rm = TRUE),
+          Plant_Area = mean(Plant_Area, na.rm = TRUE),
+          Abundance = mean(Abundance, na.rm = TRUE),
+          GT_Cat = mean(GT_Cat, na.rm = TRUE))
+          .groups = "drop"
+
+             
+JB_Model_Data$Occurrence <- ifelse(JB_Model_Data$Occurrence > 0, 1, 0)
+
+JB_Model_Data$GT_Cat <- ifelse(JB_Model_Data$Abundance == 0, 0,
+               ifelse(JB_Model_Data$Abundance > 0 & JB_Model_Data$Abundance < 5, 1,
+               ifelse(JB_Model_Data$Abundance >= 5 & JB_Model_Data$Abundance < 25, 2,
+               ifelse(JB_Model_Data$Abundance >= 25, 3, NA))))
+
+View(JB_Model_Data)
+length(unique(JB_Model_Data$PlotID))
+length(unique(JB_Model_Data$Latitude))
+length(unique(JB_Model_Data$Longitude))
+any(duplicated(JB_Model_Data$PlotID))
+# JB_TBL <- table(JB_Model_Data$PlotID)
+# JB_TBL
+
+write.csv(JB_Model_Data, "C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/Data Tables/All_Plots.csv", row.names = FALSE)
+
+GMF_Plots <- JB_Model_Data %>% filter(SiteID == "GMF")
+write.csv(GMF_Plots, "C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/Data Tables/GMF_Plots.csv", row.names = FALSE)
+
+MGR_Plots <- JB_Model_Data %>% filter(SiteID == "MGR")
+write.csv(MGR_Plots, "C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/Data Tables/MGR_Plots.csv", row.names = FALSE)
+
+YMF_Plots <- JB_Model_Data %>% filter(SiteID == "YMF")
+write.csv(YMF_Plots, "C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/Data Tables/YMF_Plots.csv", row.names = FALSE)
+
+YNP_Plots <- JB_Model_Data %>% filter(SiteID == "YNP")
+write.csv(YNP_Plots, "C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/Data Tables/YNP_Plots.csv", row.names = FALSE)
+
+rm(Japanese_Barberry_Data_Sheet, JB, JB_Model_Data, GMF_Plots, MGR_Plots, YMF_Plots, YNP_Plots, JB_TBL)
+
+```
+
+``` {r, Data Table}
+
+JBPlotsStats <- read_csv("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/Data Tables/JBPlotsStats.csv", 
+     col_types = cols(Occurrence = col_factor(levels = c("0", 
+         "1")), GT_Cat = col_factor(levels = c("0", 
+         "1", "2", "3")), USGS_Cat = col_factor(levels = c("-1", 
+         "0", "1", "2", "3")), F1934_FLUH = col_factor(levels = c("1", 
+         "2", "3", "4")), CT_ROAD_PROXIMITY_Cat = col_factor(levels = c("1", 
+         "2", "3", "4")), CT_SOILS_FARM_CLASS = col_factor(levels = c("0", 
+         "1", "2")), CT_WATER_PROXIMITY_Cat = col_factor(levels = c("1", 
+         "2", "3", "4"))))
+
+names(JBPlotsStats)[13] <- "USGS_Cat"
+names(JBPlotsStats)[14] <- "Land_Use_History"
+names(JBPlotsStats)[15] <- "Aspect"
+names(JBPlotsStats)[16] <- "Road_Proximity_Cat"
+names(JBPlotsStats)[17] <- "Road_Proximity_Cont"
+names(JBPlotsStats)[18] <- "Soil_Farm_Class"
+names(JBPlotsStats)[19] <- "Soil_Hydric_Rating"
+names(JBPlotsStats)[20] <- "Water_Proximity_Cat"
+names(JBPlotsStats)[21] <- "Water_Proximity_Cont"
+names(JBPlotsStats)[22] <- "Elevation"
+names(JBPlotsStats)[23] <- "LST_Day"
+names(JBPlotsStats)[24] <- "LST_Night"
+names(JBPlotsStats)[25] <- "TMAX"
+names(JBPlotsStats)[26] <- "TMIN"
+names(JBPlotsStats)[27] <- "NDVI"
+names(JBPlotsStats)[28] <- "Precipitation"
+names(JBPlotsStats)[29] <- "Humidity"
+names(JBPlotsStats)[30] <- "Slope"
+names(JBPlotsStats)[31] <- "Soil_Water"
+
+levels(JBPlotsStats$USGS_Cat)[levels(JBPlotsStats$USGS_Cat) == "-1"] <- "0"
+
+JBPlotsStats$Occurrence <- factor(JBPlotsStats$Occurrence, ordered = TRUE, levels = c("0", "1"))
+JBPlotsStats$GT_Cat <- factor(JBPlotsStats$GT_Cat, ordered = TRUE, levels = c("0", "1", "2", "3"))
+JBPlotsStats$USGS_Cat <- factor(JBPlotsStats$USGS_Cat, ordered = TRUE, levels = c("0", "1", "2", "3"))
+JBPlotsStats$Road_Proximity_Cat <- factor(JBPlotsStats$Road_Proximity_Cat, ordered = TRUE, levels = c("1", "2", "3", "4"))
+JBPlotsStats$Soil_Farm_Class <- factor(JBPlotsStats$Soil_Farm_Class, ordered = TRUE, levels = c("0", "1", "2"))
+JBPlotsStats$Water_Proximity_Cat <- factor(JBPlotsStats$Water_Proximity_Cat, ordered = TRUE, levels = c("1", "2", "3", "4"))
+
+JBPlotsStats$Abundance[JBPlotsStats$Abundance > 100] <- 100
+range(JBPlotsStats$Abundance)
+
+str(JBPlotsStats)
+
+View(JBPlotsStats)
+table(JBPlotsStats$Occurrence)
+table(JBPlotsStats$GT_Cat)
+table(JBPlotsStats$USGS_Cat)
+
+save.image("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/RStudio/Projects/JBPlotsStats")
+
+```
+
+``` {r, Abundance Summary Statistics}
+
+summary(JBPlotsStats)
+
+# install.packages("psych")
+library(psych)
+JBPlotsSummary <- describe(JBPlotsStats[,-1:-5])
+print(JBPlotsSummary)
+
+ggplot(JBPlotsStats, aes(x = Distance, y = Plant_Area)) +
+  geom_point(color = "blue", size = 2) +
+  labs(title = "Plant Distance and Area Per Plot", x = "Distance From Plot Center (m)", y = "Plant Area (m^2)") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Distance, y = Plant_Area, shape = SiteID, color = SiteID)) +
+  geom_point(size = 2) +
+  scale_color_manual(values = c(
+    "GMF" = "red",
+    "YNP" = "purple",
+    "YMF" = "blue",
+    "MGR" = "yellow"
+  )) +
+  scale_shape_manual(values = c(
+    "GMF" = 17,   # triangle
+    "YNP" = 8,    # star
+    "YMF" = 16,   # circle
+    "MGR" = 15    # square
+  )) +
+  labs(title = "Plant Distance and Area Per Plot",
+       x = "Distance From Plot Center (m)",
+       y = "Plant Area (m^2)") +
+  theme_minimal()
+
+boxplot(Abundance ~ SiteID, data = JBPlotsStats,
+        outline = FALSE,
+        main = "Abudance by Site",
+        xlab = "Sites",
+        ylab = "Abundance (Proportion of Land Area Covered)",
+        col = "lightblue")
+
+
+gt_counts <- as.data.frame(table(SiteID = JBPlotsStats$SiteID,                                Category = JBPlotsStats$GT_Cat))
+gt_counts$Variable <- "GT_Cat"
+usgs_counts <- as.data.frame(table(SiteID = JBPlotsStats$SiteID,                                 Category = JBPlotsStats$USGS_Cat))
+usgs_counts$Variable <- "USGS_Cat"
+combined_counts <- rbind(gt_counts, usgs_counts)
+
+ggplot(combined_counts, aes(x = Category, y = Freq, fill = SiteID)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Variable) +
+  labs(title = "Counts of GT_Cat and USGS_Cat by Site",
+       x = "Suitability Category",
+       y = "Count") +
+  theme_minimal()
+
+# YNP <- JBPlotsStats %>%
+#   filter(SiteID == "YNP")
+
+gt_counts <- as.data.frame(table(Category = JBPlotsStats$GT_Cat))
+gt_counts$Variable <- "Observed Plots"
+usgs_counts <- as.data.frame(table(Category = JBPlotsStats$USGS_Cat))
+usgs_counts$Variable <- "Expected Plots"
+combined_counts <- rbind(gt_counts, usgs_counts)
+levels(combined_counts$Category)[levels(combined_counts$Category) == "0"] <- "Absent"
+levels(combined_counts$Category)[levels(combined_counts$Category) == "1"] <- "<5% Cover"
+levels(combined_counts$Category)[levels(combined_counts$Category) == "2"] <- "<25% Cover"
+levels(combined_counts$Category)[levels(combined_counts$Category) == "3"] <- ">25% Cover"
+
+ggplot(combined_counts, aes(x = Category, y = Freq, fill = Variable)) +
+  geom_bar(stat = "identity", position = "dodge", color = "black", linewidth = 0.7) +
+  labs(title = " Observed Vs Expected Plots Per Abundance Categories",
+       x = "Abundance Suitability Category",
+       y = "Number of Plots") + 
+  scale_fill_discrete(name = "", 
+                      labels = c("Observed Abundances", "USGS Predicted Abundances")) +
+  scale_fill_manual(values = c("black", "white")) +
+  theme_minimal()
+
+
+rm(JBPlotsSummary, gt_counts, usgs_counts, combined_counts, YNP, GMF, MGR, YMF)
+
+```
+
+``` {r, Coorelation Matrix}
+
+JB_Correlation <- JBPlotsStats %>% dplyr::select( "Abundance",
+                                       # "Land_Use_History",
+                                       # "Aspect",
+                                       # "Road_Proximity_Cat",
+                                       "Road_Proximity_Cont",
+                                       # "Soil_Farm_Class",
+                                       # "Soil_Hydric_Rating",
+                                       # "Water_Proximity_Cat",
+                                       "Water_Proximity_Cont",
+                                       "Elevation",
+                                       # "LST_Day",
+                                       # "LST_Night",
+                                       # "TMAX",
+                                       # "TMIN",
+                                       "NDVI",
+                                       # "Precipitation",
+                                       # "Humidity",
+                                       # "Slope",
+                                       "Soil_Water")
+
+JB_cor_matrix <- cor(JB_Correlation, use = "complete.obs")
+JB_Correlation_Matrix <- as.data.frame(JB_cor_matrix)
+View(JB_Correlation_Matrix)
+corrplot(JB_cor_matrix, method = "number")
+
+write.csv(JB_Correlation_Matrix, "C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/Data Tables/JB_Correlation_Matrix.csv", row.names = TRUE)
+
+```
+
+``` {r, Binomial Presence/Absence Analysis}
+
+JB_Binomial <- JBPlotsStats
+JB_Binomial$Occurrence <- as.numeric(as.character(JB_Binomial$Occurrence))
+
+binom.test(sum(JB_Binomial$Occurrence), nrow(JB_Binomial), p = 0.5, alternative = "two.sided")
+
+GMF <- JB_Binomial[JB_Binomial$SiteID == "GMF", ]
+YNP <- JB_Binomial[JB_Binomial$SiteID == "YNP", ]
+YMF <- JB_Binomial[JB_Binomial$SiteID == "YMF", ]
+MGR <- JB_Binomial[JB_Binomial$SiteID == "MGR", ]
+
+binom.test(sum(GMF$Occurrence), nrow(GMF), p = 0.5, alternative = "two.sided")
+binom.test(sum(YNP$Occurrence), nrow(YNP), p = 0.5, alternative = "two.sided")
+binom.test(sum(YMF$Occurrence), nrow(YMF), p = 0.5, alternative = "two.sided")
+binom.test(sum(MGR$Occurrence), nrow(MGR), p = 0.5, alternative = "two.sided")
+
+USGS_Presence_Prob <- 1 - sum(as.numeric(as.character(JB_Binomial$USGS_Cat)) == 0, na.rm = TRUE) / nrow(JB_Binomial)
+GMF_Presence_Prob <- 1 - sum(as.numeric(as.character(GMF$USGS_Cat)) == 0, na.rm = TRUE) / nrow(GMF)
+YNP_Presence_Prob <- 1 - sum(as.numeric(as.character(YNP$USGS_Cat)) == 0, na.rm = TRUE)/nrow(YNP)
+YMF_Presence_Prob <- 1 - sum(as.numeric(as.character(YMF$USGS_Cat)) == 0, na.rm = TRUE)/nrow(YMF)
+MGR_Presence_Prob <- 1 - sum(as.numeric(as.character(MGR$USGS_Cat)) == 0, na.rm = TRUE)/nrow(MGR)
+
+
+binom.test(sum(JB_Binomial$Occurrence), nrow(JB_Binomial), p = USGS_Presence_Prob, alternative = "two.sided")
+
+binom.test(sum(GMF$Occurrence), nrow(GMF), p = GMF_Presence_Prob, alternative = "two.sided")
+binom.test(sum(YNP$Occurrence), nrow(YNP), p = YNP_Presence_Prob, alternative = "two.sided")
+binom.test(sum(YMF$Occurrence), nrow(YMF), p = YMF_Presence_Prob, alternative = "two.sided")
+binom.test(sum(MGR$Occurrence), nrow(MGR), p = MGR_Presence_Prob, alternative = "two.sided")
+
+USGS_Presence <- sum(as.numeric(as.character(JB_Binomial$USGS_Cat)) != 0, na.rm = TRUE)
+GT_Presence<- sum(as.numeric(as.character(JB_Binomial$GT_Cat)) != 0, na.rm = TRUE)
+Presence <- data.frame(
+  Category = c("Observed", "Expected"),
+  Number = c(113, 224)
+)
+View(Presence)
+
+ggplot(Presence, aes(x = Category, y = Number, fill = Category)) +
+  geom_bar(stat = "identity", position = "dodge", color = "black", linewidth = 0.5, width = 0.5, show.legend = FALSE) +
+  labs(title = " Observed Vs Expected Presence",
+       x = "",
+       y = "Number of Plots") +
+  scale_fill_manual(values = c("white", "black")) +
+  theme_minimal()
+
+rm(JB_Binomial, GMF, YNP, YMF, MGR, USGS_Presence_Prob, GMF_Presence_Prob, YNP_Presence_Prob, YMF_Presence_Prob, MGR_Presence_Prob)
+
+```
+
+``` {r, Binomial Abundance Analysis}
+
+JB_Binomial <- JBPlotsStats
+JB_Binomial$GT_Cat <- as.numeric(as.character(JB_Binomial$GT_Cat))
+
+GMF <- JB_Binomial[JB_Binomial$SiteID == "GMF", ]
+YNP <- JB_Binomial[JB_Binomial$SiteID == "YNP", ]
+YMF <- JB_Binomial[JB_Binomial$SiteID == "YMF", ]
+MGR <- JB_Binomial[JB_Binomial$SiteID == "MGR", ]
+
+#Suitability For Occurrence
+
+Total_Plots_1 <- JB_Binomial[JB_Binomial$GT_Cat == "1", ]
+USGS_Occurrence_Prob <- sum(as.numeric(as.character(JB_Binomial$USGS_Cat)) == 1, na.rm = TRUE)/nrow(JB_Binomial)
+
+binom.test(sum(Total_Plots_1$GT_Cat), nrow(JB_Binomial), p = USGS_Occurrence_Prob, alternative = "two.sided")
+
+USGS_Occurrence <- sum(as.numeric(as.character(JBPlotsStats$USGS_Cat)) == 1, na.rm = TRUE)
+GT_Occurrence <- sum(as.numeric(as.character(JBPlotsStats$GT_Cat)) == 1, na.rm = TRUE)
+Occurrence <- data.frame(
+  Category = c("Observed", "Expected"),
+  Number = c(84, 5))
+
+ggplot(Occurrence, aes(x = Category, y = Number, fill = Category)) +
+  geom_bar(stat = "identity", position = "dodge", color = "black", linewidth = 0.5, width = 0.5, show.legend = FALSE) +
+  labs(title = " Observed Vs Expected Occurrence (<5% Cover)",
+       x = "",
+       y = "Number of Plots") + 
+  scale_fill_discrete(name = "", 
+                      labels = c("Observed Abundances", "USGS Predicted Abundances")) +
+  scale_fill_manual(values = c("white", "black")) +
+  theme_minimal()
+
+GMF_1 <- GMF[GMF$GT_Cat == "1", ]
+YNP_1 <- YNP[YNP$GT_Cat == "1", ]
+YMF_1 <- YMF[YMF$GT_Cat == "1", ]
+MGR_1 <- MGR[MGR$GT_Cat == "1", ]
+
+GMF_Occurrence_Prob <- sum(as.numeric(as.character(GMF$USGS_Cat)) == 1, na.rm = TRUE)/nrow(GMF)
+YNP_Occurrence_Prob <- sum(as.numeric(as.character(YNP$USGS_Cat)) == 1, na.rm = TRUE)/nrow(YNP)
+YMF_Occurrence_Prob <- sum(as.numeric(as.character(YMF$USGS_Cat)) == 1, na.rm = TRUE)/nrow(YMF)
+MGR_Occurrence_Prob <- sum(as.numeric(as.character(MGR$USGS_Cat)) == 1, na.rm = TRUE)/nrow(MGR)
+
+binom.test(sum(GMF_1$GT_Cat), nrow(GMF), p = GMF_Occurrence_Prob, alternative = "two.sided")
+# binom.test(sum(YNP_1$GT_Cat), nrow(YNP), p = YNP_Occurrence_Prob, alternative = "two.sided")
+binom.test(sum(YMF_1$GT_Cat), nrow(YMF), p = YMF_Occurrence_Prob, alternative = "two.sided")
+binom.test(sum(MGR_1$GT_Cat), nrow(MGR), p = MGR_Occurrence_Prob, alternative = "two.sided")
+
+#Suitability For Abundance
+
+Total_Plots_2 <- JB_Binomial[JB_Binomial$GT_Cat == "2", ]
+USGS_Abundance_Prob <- sum(as.numeric(as.character(JB_Binomial$USGS_Cat)) == 2, na.rm = TRUE)/nrow(JB_Binomial)
+
+binom.test(sum(Total_Plots_2$GT_Cat)/2, nrow(JB_Binomial), p = USGS_Abundance_Prob, alternative = "two.sided")
+
+USGS_Abundance <- sum(as.numeric(as.character(JBPlotsStats$USGS_Cat)) == 2, na.rm = TRUE)
+GT_Abundance <- sum(as.numeric(as.character(JBPlotsStats$GT_Cat)) == 2, na.rm = TRUE)
+Abundance <- data.frame(
+  Category = c("Observed", "Expected"),
+  Number = c(17, 11))
+
+ggplot(Abundance, aes(x = Category, y = Number, fill = Category)) +
+  geom_bar(stat = "identity", position = "dodge", color = "black", linewidth = 0.5, width = 0.5, show.legend = FALSE) +
+  labs(title = " Observed Vs Expected Abundance (<25% Cover)",
+       x = "",
+       y = "Number of Plots") + 
+  scale_fill_discrete(name = "", 
+                      labels = c("Observed Abundances", "USGS Predicted Abundances")) +
+  scale_fill_manual(values = c("white", "black")) +
+  theme_minimal()
+
+GMF_2 <- GMF[GMF$GT_Cat == "2", ]
+YNP_2 <- YNP[YNP$GT_Cat == "2", ]
+YMF_2 <- YMF[YMF$GT_Cat == "2", ]
+MGR_2 <- MGR[MGR$GT_Cat == "2", ]
+
+GMF_Abundance_Prob <- sum(as.numeric(as.character(GMF$USGS_Cat)) == 2, na.rm = TRUE)/nrow(GMF)
+YNP_Abundance_Prob <- sum(as.numeric(as.character(YNP$USGS_Cat)) == 2, na.rm = TRUE)/nrow(YNP)
+YMF_Abundance_Prob <- sum(as.numeric(as.character(YMF$USGS_Cat)) == 2, na.rm = TRUE)/nrow(YMF)
+MGR_Abundance_Prob <- sum(as.numeric(as.character(MGR$USGS_Cat)) == 2, na.rm = TRUE)/nrow(MGR)
+
+binom.test(sum(GMF_2$GT_Cat)/2, nrow(GMF), p = GMF_Abundance_Prob, alternative = "two.sided")
+binom.test(sum(YNP_2$GT_Cat)/2, nrow(YNP), p = YNP_Abundance_Prob, alternative = "two.sided")
+binom.test(sum(YMF_2$GT_Cat)/2, nrow(YMF), p = YMF_Abundance_Prob, alternative = "two.sided")
+binom.test(sum(MGR_2$GT_Cat)/2, nrow(MGR), p = MGR_Abundance_Prob, alternative = "two.sided")
+
+#Suitability For High Abundance
+
+Total_Plots_3 <- JB_Binomial[JB_Binomial$GT_Cat == "3", ]
+USGS_High_Abundance_Prob <- sum(as.numeric(as.character(JB_Binomial$USGS_Cat)) == 3, na.rm = TRUE)/nrow(JB_Binomial)
+
+binom.test(sum(Total_Plots_3$GT_Cat)/3, nrow(JB_Binomial), p = USGS_High_Abundance_Prob, alternative = "two.sided")
+
+USGS_HighAbundance <- sum(as.numeric(as.character(JBPlotsStats$USGS_Cat)) == 3, na.rm = TRUE)
+GT_HighAbundance <- sum(as.numeric(as.character(JBPlotsStats$GT_Cat)) == 3, na.rm = TRUE)
+HighAbundance <- data.frame(
+  Category = c("Observed", "Expected"),
+  Number = c(32, 208))
+
+ggplot(HighAbundance, aes(x = Category, y = Number, fill = Category)) +
+  geom_bar(stat = "identity", position = "dodge", color = "black", linewidth = 0.5, width = 0.5, show.legend = FALSE) +
+  labs(title = " Observed Vs Expected High Abundance (>25% Cover)",
+       x = "",
+       y = "Number of Plots") + 
+  scale_fill_discrete(name = "", 
+                      labels = c("Observed Abundances", "USGS Predicted Abundances")) +
+  scale_fill_manual(values = c("white", "black")) +
+  theme_minimal()
+
+GMF_3 <- GMF[GMF$GT_Cat == "3", ]
+YNP_3 <- YNP[YNP$GT_Cat == "3", ]
+YMF_3 <- YMF[YMF$GT_Cat == "3", ]
+MGR_3 <- MGR[MGR$GT_Cat == "3", ]
+
+GMF_High_Abundance_Prob <- sum(as.numeric(as.character(GMF$USGS_Cat)) == 3, na.rm = TRUE)/nrow(GMF)
+YNP_High_Abundance_Prob <- sum(as.numeric(as.character(YNP$USGS_Cat)) == 3, na.rm = TRUE)/nrow(YNP)
+YMF_High_Abundance_Prob <- sum(as.numeric(as.character(YMF$USGS_Cat)) == 3, na.rm = TRUE)/nrow(YMF)
+MGR_High_Abundance_Prob <- sum(as.numeric(as.character(MGR$USGS_Cat)) == 3, na.rm = TRUE)/nrow(MGR)
+
+binom.test(sum(GMF_3$GT_Cat)/3, nrow(GMF), p = GMF_High_Abundance_Prob, alternative = "two.sided")
+# binom.test(sum(YNP_3$GT_Cat)/3, nrow(YNP), p = YNP_High_Abundance_Prob, alternative = "two.sided")
+binom.test(sum(YMF_3$GT_Cat)/3, nrow(YMF), p = YMF_High_Abundance_Prob, alternative = "two.sided")
+binom.test(sum(MGR_3$GT_Cat)/3, nrow(MGR), p = MGR_High_Abundance_Prob, alternative = "two.sided")
+
+rm(JB_Binomial, Total_Plots_1, Total_Plots_2, Total_Plots_3, GMF, GMF_1, GMF_2, GMF_3, YNP, YNP_1, YNP_2, YNP_3, YMF, YMF_1, YMF_2, YMF_3, MGR, MGR_1, MGR_2, MGR_3, USGS_Occurrence_Prob, USGS_Abundance_Prob, USGS_High_Abundance_Prob, GMF_Occurrence_Prob, GMF_Abundance_Prob, GMF_High_Abundance_Prob, YNP_Occurrence_Prob, YNP_Abundance_Prob, YNP_High_Abundance_Prob, YMF_Occurrence_Prob, YMF_Abundance_Prob, YMF_High_Abundance_Prob, MGR_Occurrence_Prob, MGR_Abundance_Prob, MGR_High_Abundance_Prob)
+```
+
+``` {r, Abundance Confusion Matrix}
+
+USGS_Cat <- factor(JBPlotsStats$USGS_Cat)
+GT_Cat <- factor(JBPlotsStats$GT_Cat)
+
+JB_Cat.Confusion_Matrix <- confusionMatrix(data=USGS_Cat, reference = GT_Cat)
+JB_Cat.Confusion_Matrix
+
+```
+
+``` {r, Abundance Confusion Matrix Stats}
+
+JB_Cat.Confusion_Matrix
+
+# Extract the confusion matrix table
+JB_Cat.Confusion_Table <- JB_Cat.Confusion_Matrix$table  # rows = predicted, cols = actual in caret!
+
+Table_Rows <- nrow(JB_Cat.Confusion_Table)
+TP <- FP <- FN <- TN <- numeric(Table_Rows)
+
+for (i in 1:Table_Rows) {
+  TP[i] <- JB_Cat.Confusion_Table[i, i]
+  FP[i] <- sum(JB_Cat.Confusion_Table[i, ]) - JB_Cat.Confusion_Table[i, i]  # Note: caret table is transposed!
+  FN[i] <- sum(JB_Cat.Confusion_Table[, i]) - JB_Cat.Confusion_Table[i, i]
+  TN[i] <- sum(JB_Cat.Confusion_Table) - TP[i] - FP[i] - FN[i]
+}
+
+#Index number refers to column (observation) by factor level (i.e. 1 = Class 0,  2 = Class 1,  3 = Class 2,  4 = Class 3)
+
+C.0_Weight <- 96/229
+C.1_Weight <- 84/229
+C.2_Weight <- 17/229
+C.3_Weight <- 32/229
+
+JB_Cat.Confusion_Matrix$byClass
+
+#Accuracy
+Weighted_Accuracy <- JB_Cat.Confusion_Matrix$overall["Accuracy"]
+
+print("Weighted Accuracy")
+Weighted_Accuracy
+
+C0A <- TP[1]/96
+C1A <- TP[2]/84
+C2A <- TP[3]/17
+C3A <- TP[4]/32
+  
+print("Class Accuracy")
+C0A 
+C1A 
+C2A 
+C3A
+  
+#Precision
+(JB_Cat.Confusion_Matrix$byClass[ , "Precision"])
+
+#Example
+# Weighted_Precision <- sum(
+#   (C.0_Weight*JB_Cat.Confusion_Matrix$byClass[ 1, "Precision"]),
+#   (C.1_Weight*JB_Cat.Confusion_Matrix$byClass[ 2, "Precision"]),
+#   (C.2_Weight*JB_Cat.Confusion_Matrix$byClass[ 3, "Precision"]),
+#   (C.3_Weight*JB_Cat.Confusion_Matrix$byClass[ 4, "Precision"])
+#   )
+
+Weighted_Precision <- weighted.mean(JB_Cat.Confusion_Matrix$byClass[, "Precision"], colSums(JB_Cat.Confusion_Matrix$table))
+
+print("Weighted Precision")
+Weighted_Precision
+
+
+#Recall (Sensitivity)
+Weighted_Sensitivity <- weighted.mean(JB_Cat.Confusion_Matrix$byClass[, "Sensitivity"], colSums(JB_Cat.Confusion_Matrix$table))
+
+print("Weighted Sensitivity")
+Weighted_Sensitivity
+
+# JB_Cat.Confusion_Matrix$byClass[ 1, "Sensitivity"]
+# TP[1]/sum(TP[1],FN[1])
+# JB_Cat.Confusion_Matrix$byClass[ 2, "Sensitivity"]
+# TP[2]/sum(TP[2],FN[2])
+# JB_Cat.Confusion_Matrix$byClass[ 3, "Sensitivity"]
+# TP[3]/sum(TP[3],FN[3])
+# JB_Cat.Confusion_Matrix$byClass[ 4, "Sensitivity"]
+# TP[4]/sum(TP[4],FN[4])
+
+#Specificity
+Weighted_Specificity <- weighted.mean(JB_Cat.Confusion_Matrix$byClass[, "Specificity"], colSums(JB_Cat.Confusion_Matrix$table))
+
+print("Weighted Specificity")
+Weighted_Specificity
+
+# JB_Cat.Confusion_Matrix$byClass[ 1, "Specificity"]
+# TN[1]/sum(TN[1],FP[1])
+# JB_Cat.Confusion_Matrix$byClass[ 2, "Specificity"]
+# TN[2]/sum(TN[2],FP[2])
+# JB_Cat.Confusion_Matrix$byClass[ 3, "Specificity"]
+# TN[3]/sum(TN[3],FP[3])
+# JB_Cat.Confusion_Matrix$byClass[ 4, "Specificity"]
+# TN[4]/sum(TN[4],FP[4])
+
+#F1-Score
+Weighted_F1 <- weighted.mean(JB_Cat.Confusion_Matrix$byClass[, "F1"], colSums(JB_Cat.Confusion_Matrix$table))
+
+print("Weighted F1")
+Weighted_F1
+
+#Type-I Error
+T1.0 <- FP[1]/(FP[1]+TN[1])
+T1.1 <- FP[2]/(FP[2]+TN[2])
+T1.2 <- FP[3]/(FP[3]+TN[3])
+T1.3 <- FP[4]/(FP[4]+TN[4])
+  
+print("Class Type-I Error")
+T1.0
+T1.1
+T1.2
+T1.3
+
+Weighted_Type_I_Error <- weighted.mean(
+  c(T1.0, T1.1, T1.2, T1.3),
+  colSums(JB_Cat.Confusion_Matrix$table))
+  
+print("Weighted Type-I Error")
+Weighted_Type_I_Error
+
+#Type-II Error
+T2.0 <- FN[1]/(FN[1]+TP[1])
+T2.1 <- FN[2]/(FN[2]+TP[2])
+T2.2 <- FN[3]/(FN[3]+TP[3])
+T2.3 <- FN[4]/(FN[4]+TP[4])
+  
+print("Class Type-II Error")
+T2.0
+T2.1
+T2.2
+T2.3
+
+Weighted_Type_II_Error <- Weighted_Type_II_Error <- weighted.mean(
+  c(T2.0, T2.1, T2.2, T2.3),
+  colSums(JB_Cat.Confusion_Matrix$table))
+
+print("Weighted Type-II Error")
+Weighted_Type_II_Error
+
+```
+
+``` {r, Occurrence Confusion Matrix}
+
+JB_OCM_Matrix <- JBPlotsStats
+
+JB_OCM_Matrix$USGS_Cat <- ifelse(JB_OCM_Matrix$USGS_Cat == 0, "Absent",
+               ifelse(JB_OCM_Matrix$USGS_Cat > 0, "Present", NA))
+
+JB_OCM_Matrix$USGS_Cat <- factor(JB_OCM_Matrix$USGS_Cat, ordered = FALSE, levels = c("Present", "Absent"))
+
+JB_OCM_Matrix$Occurrence <- ifelse(JB_OCM_Matrix$Occurrence == 0, "Absent",
+               ifelse(JB_OCM_Matrix$Occurrence == 1, "Present", NA))
+
+JB_OCM_Matrix$Occurrence <- factor(JB_OCM_Matrix$Occurrence, ordered = FALSE, levels = c("Present", "Absent"))
+
+
+USGS_Occurrence <- factor(JB_OCM_Matrix$USGS_Cat)
+GT_Occurrence <- factor(JB_OCM_Matrix$Occurrence)
+
+JB_Occ.Confusion_Matrix <- confusionMatrix(data=USGS_Occurrence, reference = GT_Occurrence)
+JB_Occ.Confusion_Matrix
+
+JB_Occ.Confusion_Matrix$byClass
+
+(130+2)/229
+
+print("Sensitivity")
+130/(130+3)
+
+print("Specificity")
+2/(2+94)
+
+print("Precision")
+130/(130+94)
+
+print("F1-Score")
+(2*(130/(130+94))*(130/(130+3)))/((130/(130+94))+(130/(130+3)))
+
+print("Type-I Error")
+94/(94+2)
+
+print("Type-II Error")
+3/(3+130)
+
+```
+
+``` {r, Chi-Sqaured Test of Independence (Site Analysis)}
+JBPlotsStats.box <- JBPlotsStats
+
+boxplot(Occurrence ~ SiteID, data = JBPlotsStats.box,
+        main = "GT Occurrence by Site",
+        xlab = "Sites",
+        ylab = "Occurrences",
+        col = "lightblue")
+
+#Presence/Absence
+Chi_Sqaure_Occurrence_Sites <- JBPlotsStats %>% dplyr::select("SiteID", "Occurrence")
+Chi_Sqaure_Occurrence_Sites <- na.omit(Chi_Sqaure_Occurrence_Sites)
+View(Chi_Sqaure_Occurrence_Sites)
+
+Chi_Sqaure__Occurrence_Sites_Tbl <- table(Chi_Sqaure_Occurrence_Sites)
+print(Chi_Sqaure__Occurrence_Sites_Tbl)
+
+chisq.test(Chi_Sqaure__Occurrence_Sites_Tbl)
+
+mosaicplot(Chi_Sqaure__Occurrence_Sites_Tbl, shade = FALSE, main = "Mosaic Plot of Observed Occurrences By Site")
+
+#Abundance
+boxplot(GT_Cat ~ SiteID, data = JBPlotsStats.box,
+        main = "GT Abundance Category by Site",
+        xlab = "Sites",
+        ylab = "Abundance",
+        col = "lightblue")
+
+Chi_Sqaure_Abundance_Sites <- JBPlotsStats %>% dplyr::select("SiteID", "GT_Cat")
+Chi_Sqaure_Abundance_Sites <- na.omit(Chi_Sqaure_Abundance_Sites)
+View(Chi_Sqaure_Abundance_Sites)
+
+Chi_Sqaure_Abundance_Sites_Tbl <- table(Chi_Sqaure_Abundance_Sites)
+print(Chi_Sqaure_Abundance_Sites_Tbl)
+
+chisq.test(Chi_Sqaure_Abundance_Sites_Tbl)
+
+mosaicplot(Chi_Sqaure_Abundance_Sites_Tbl, shade = FALSE, main = "Mosaic Plot of Observed Categories By Site")
+
+rm(Chi_Sqaure_Abundance_Sites, Chi_Sqaure_Occurrence_Sites, Chi_Sqaure__Occurrence_Sites_Tbl, Chi_Sqaure_Abundance_Sites_Tbl, JBPlotsStats.box)
+
+```
+
+``` {r, Chi-Sqaured Goodness of Fit (Observed vs Expected)}
+
+JBPlotsStats.box <- JBPlotsStats
+JBPlotsStats.box$GT_Cat <- as.numeric(as.character(JBPlotsStats.box$GT_Cat))
+JBPlotsStats.box$USGS_Cat <- as.numeric(as.character(JBPlotsStats.box$USGS_Cat))
+
+boxplot(GT_Cat ~ SiteID, data = JBPlotsStats.box,
+        main = "GT Abundance Category by Site",
+        xlab = "Site",
+        ylab = "Abundance",
+        col = "lightblue")
+
+boxplot(USGS_Cat ~ SiteID, data = JBPlotsStats.box,
+        main = "USGS Abundance Category by Site",
+        xlab = "Site",
+        ylab = "Abundance",
+        col = "lightblue")
+
+print("JP Plots GT Counts")
+JBPlots.GT <- table(JBPlotsStats$GT_Cat)
+
+print("JP Plots USGS Counts")
+JBPlots.USGS <- table(JBPlotsStats$USGS_Cat)
+
+JB_Categories <- c("0", "1", "2", "3")
+
+print(JBPlots.GT)
+print(JBPlots.USGS)
+
+chisq.test(x = JBPlots.GT, p = JBPlots.USGS / sum(JBPlots.USGS))
+
+barplot(rbind(JBPlots.GT, JBPlots.USGS), beside = TRUE,
+        names.arg = JB_Categories,
+        col = c("skyblue", "orange"),
+        legend.text = c("Ground Truth", "USGS"),
+        main = "Ground Truth Observed vs USGS Expected Counts")
+
+
+#REMOVE IF A PLOT WITH NO SUITABILITY IS MEASURED
+# JBPlots.GoF_GT <- table(as.numeric(as.character(JBPlotsStats$GT_Cat))[JBPlotsStats$GT_Cat != 0])
+# JBPlots.GoF_USGS <- table(as.numeric(as.character(JBPlotsStats$USGS_Cat))[JBPlotsStats$USGS_Cat != 0])
+# 
+# print(JBPlots.GoF_GT)
+# print(JBPlots.GoF_USGS)
+# 
+# chisq.test(x = JBPlots.GoF_GT, p = JBPlots.GoF_USGS / sum(JBPlots.GoF_USGS)) #because no point has overlapped a zero yet, chi-square is struggling to work
+
+rm(JBPlotsStats.box, JB_Categories, JBPlots.GoF_GT, JBPlots.GoF_USGS, JBPlots.GT, JBPlots.USGS)
+```
+
+``` {r, Chi-Sqaured Test of Independence (Cat vs Cat)}
+JBPlotsStats.box <- JBPlotsStats
+
+boxplot(GT_Cat ~ SiteID, data = JBPlotsStats.box,
+        main = "GT Abundance Category by Site",
+        xlab = "Sites",
+        ylab = "Abundance",
+        col = "lightblue")
+
+boxplot(USGS_Cat ~ SiteID, data = JBPlotsStats.box,
+        main = "USGS Abundance Category by Site",
+        xlab = "Site",
+        ylab = "Abundance",
+        col = "lightblue")
+
+JBPlots.CSToI_1 <- JBPlotsStats %>% dplyr::select("GT_Cat", "USGS_Cat")
+JBPlots.CSToI_1 <- na.omit(JBPlots.CSToI_1)
+names(JBPlots.CSToI_1)[1] <- "Observed Abundance Counts"
+names(JBPlots.CSToI_1)[2] <- "INHABIT Predicted Abundance Counts "
+View(JBPlots.CSToI_1)
+
+JBPlots.CSToI.tbl_1 <- table(JBPlots.CSToI_1)
+print(JBPlots.CSToI.tbl_1)
+
+fisher.test(JBPlots.CSToI.tbl_1) #For small amounts of data (in the table, not the data frame)
+chisq.test(JBPlots.CSToI.tbl_1) #For large amounts of data
+
+mosaicplot(JBPlots.CSToI.tbl_1, shade = FALSE, main = "Mosaic Plot of Observed vs Predicted Counts of Categories")
+
+#REMOVE IF A PLOT WITH NO SUITABILITY IS MEASURED
+# JBPlots.CSToI_2 <-JBPlots.CSToI_1
+# names(JBPlots.CSToI_2)[1] <- "Observed_Abundances"
+# names(JBPlots.CSToI_2)[2] <- "USGS_Predicted_Abundances"
+# JBPlots.CSToI_2 <- JBPlots.CSToI_2[as.numeric(as.character(JBPlots.CSToI_2$Observed_Abundances)) != 0 & 
+#                as.numeric(as.character(JBPlots.CSToI_2$USGS_Predicted_Abundances)) != 0, ]
+# View(JBPlots.CSToI_2)
+# 
+# JBPlots.CSToI_2$GT_Cat <- as.numeric(as.character(JBPlots.CSToI_2$Observed_Abundances))
+# JBPlots.CSToI_2$USGS_Cat <- as.numeric(as.character(JBPlots.CSToI_2$USGS_Predicted_Abundances))
+# 
+# JBPlots.CSToI.tbl_2 <- table(JBPlots.CSToI_2)
+# print(JBPlots.CSToI.tbl_2)
+# 
+# fisher.test(JBPlots.CSToI.tbl_2) #For small amounts of data (in the table, not the data frame)
+# chisq.test(JBPlots.CSToI.tbl_2) #For large amounts of data
+# 
+# mosaicplot(JBPlots.CSToI.tbl_2, shade = FALSE, main = "Mosaic Plot of Ground Truth vs USGS Categories")
+
+rm(JBPlots.CSToI_1, JBPlots.CSToI_2, JBPlotsStats.box, JBPlots.CSToI.tbl_1, JBPlots.CSToI.tbl_2)
+
+```
+
+``` {r, T-test (difference of continuous variables means)}
+
+JBPlotsStats.box <- JBPlotsStats
+
+boxplot(GT_Cat ~ SiteID, data = JBPlotsStats.box,
+        main = "GT Abundance Category by Site",
+        xlab = "Site",
+        ylab = "Abundance",
+        col = "lightblue")
+
+boxplot(USGS_Cat ~ SiteID, data = JBPlotsStats.box,
+        main = "USGS Abundance Category by Site",
+        xlab = "Site",
+        ylab = "Abundance",
+        col = "lightblue")
+
+JBPlots.TTest <- JBPlotsStats %>% dplyr::select("GT_Cat", "USGS_Cat")
+
+JBPlots.TTest$GT_Cat <- as.numeric(as.character(JBPlots.TTest$GT_Cat))
+JBPlots.TTest$USGS_Cat <- as.numeric(as.character(JBPlots.TTest$USGS_Cat)) #preserves the numbers we see and not the factor levels R associated with the data
+
+
+t.test(JBPlots.TTest$GT_Cat, JBPlots.TTest$USGS_Cat)
+print("x = GT, y = USGS")
+
+rm(JBPlots.TTest, JBPlotsStats.box)
+
+```
+
+###################################################################################
+
+``` {r, Variable Scatter PLots}
+
+ggplot(JBPlotsStats, aes(x = Aspect, y = Abundance, color = USGS_Cat)) +
+  scale_color_manual(values = c("0" = "blue", "1" = "red", "2" = "yellow", "3" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "Aspect vs Abundance", x = "Aspect", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Aspect, y = Abundance, color = SiteID)) +
+  scale_color_manual(values = c("GMF" = "blue", "MGR" = "red", "YMF" = "yellow", "YNP" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "Aspect vs Abundance (By Site)", x = "Aspect", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Road_Proximity_Cont, y = Abundance, color = USGS_Cat)) +
+  scale_color_manual(values = c("0" = "blue", "1" = "red", "2" = "yellow", "3" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "Road Proximity vs Abundance", x = "Road_Proximity_Cont", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Road_Proximity_Cont, y = Abundance, color = SiteID)) +
+  scale_color_manual(values = c("GMF" = "blue", "MGR" = "red", "YMF" = "yellow", "YNP" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "Road Proximity vs Abundance (By Site)", x = "Road_Proximity_Cont", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Soil_Hydric_Rating, y = Abundance, color = USGS_Cat)) +
+  scale_color_manual(values = c("0" = "blue", "1" = "red", "2" = "yellow", "3" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "Soil_Hydric_Rating vs Abundance", x = "Soil_Hydric_Rating", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Soil_Hydric_Rating, y = Abundance, color = SiteID)) +
+  scale_color_manual(values = c("GMF" = "blue", "MGR" = "red", "YMF" = "yellow", "YNP" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "Soil_Hydric_Rating vs Abundance (By Site)", x = "Soil_Hydric_Rating", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Elevation, y = Abundance, color = USGS_Cat)) +
+  scale_color_manual(values = c("0" = "blue", "1" = "red", "2" = "yellow", "3" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "Elevation vs Abundance", x = "Elevation", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Elevation, y = Abundance, color = SiteID)) +
+  scale_color_manual(values = c("GMF" = "blue", "MGR" = "red", "YMF" = "yellow", "YNP" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "Elevation vs Abundance (By Site)", x = "Elevation", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = LST_Day, y = Abundance, color = USGS_Cat)) +
+  scale_color_manual(values = c("0" = "blue", "1" = "red", "2" = "yellow", "3" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "LST_Day vs Abundance", x = "LST_Day", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = LST_Day, y = Abundance, color = SiteID)) +
+  scale_color_manual(values = c("GMF" = "blue", "MGR" = "red", "YMF" = "yellow", "YNP" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "LST_Day vs Abundance (By Site)", x = "LST_Day", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = LST_Night, y = Abundance, color = USGS_Cat)) +
+  scale_color_manual(values = c("0" = "blue", "1" = "red", "2" = "yellow", "3" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "LST_Night vs Abundance", x = "LST_Night", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = LST_Night, y = Abundance, color = SiteID)) +
+  scale_color_manual(values = c("GMF" = "blue", "MGR" = "red", "YMF" = "yellow", "YNP" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "LST_Night vs Abundance (By Site)", x = "LST_Night", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = TMAX, y = Abundance, color = USGS_Cat)) +
+  scale_color_manual(values = c("0" = "blue", "1" = "red", "2" = "yellow", "3" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "TMAX vs Abundance", x = "TMAX", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = TMAX, y = Abundance, color = SiteID)) +
+  scale_color_manual(values = c("GMF" = "blue", "MGR" = "red", "YMF" = "yellow", "YNP" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "TMAX vs Abundance (By Site)", x = "TMAX", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = TMIN, y = Abundance, color = USGS_Cat)) +
+  scale_color_manual(values = c("0" = "blue", "1" = "red", "2" = "yellow", "3" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "TMIN vs Abundance", x = "TMIN", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = TMIN, y = Abundance, color = SiteID)) +
+  scale_color_manual(values = c("GMF" = "blue", "MGR" = "red", "YMF" = "yellow", "YNP" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "TMIN vs Abundance (By Site)", x = "TMIN", y = "Abundance") +
+  theme_minimal()
+
+
+ggplot(JBPlotsStats, aes(x = NDVI, y = Abundance, color = USGS_Cat)) +
+  scale_color_manual(values = c("0" = "blue", "1" = "red", "2" = "yellow", "3" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "NDVI vs Abundance", x = "NDVI", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = NDVI, y = Abundance, color = SiteID)) +
+  scale_color_manual(values = c("GMF" = "blue", "MGR" = "red", "YMF" = "yellow", "YNP" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "NDVI vs Abundance (By Site)", x = "NDVI", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Precipitation, y = Abundance, color = USGS_Cat)) +
+  scale_color_manual(values = c("0" = "blue", "1" = "red", "2" = "yellow", "3" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "Precipitation vs Abundance", x = "Precipitation", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Precipitation, y = Abundance, color = SiteID)) +
+  scale_color_manual(values = c("GMF" = "blue", "MGR" = "red", "YMF" = "yellow", "YNP" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "Precipitation vs Abundance (By Site)", x = "Precipitation", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Humidity, y = Abundance, color = USGS_Cat)) +
+  scale_color_manual(values = c("0" = "blue", "1" = "red", "2" = "yellow", "3" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "Humidity vs Abundance", x = "Humidity", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Humidity, y = Abundance, color = SiteID)) +
+  scale_color_manual(values = c("GMF" = "blue", "MGR" = "red", "YMF" = "yellow", "YNP" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "Humidity vs Abundance (By Site)", x = "Humidity", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Slope, y = Abundance, color = USGS_Cat)) +
+  scale_color_manual(values = c("0" = "blue", "1" = "red", "2" = "yellow", "3" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "Slope vs Abundance", x = "Slope", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Slope, y = Abundance, color = SiteID)) +
+  scale_color_manual(values = c("GMF" = "blue", "MGR" = "red", "YMF" = "yellow", "YNP" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "Slope vs Abundance (By Site)", x = "Slope", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Soil_Water, y = Abundance, color = USGS_Cat)) +
+  scale_color_manual(values = c("0" = "blue", "1" = "red", "2" = "yellow", "3" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "Soil_Water vs Abundance", x = "Soil_Water", y = "Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Soil_Water, y = Abundance, color = SiteID)) +
+  scale_color_manual(values = c("GMF" = "blue", "MGR" = "red", "YMF" = "yellow", "YNP" = "green")) +
+  geom_smooth(method = "lm", se = TRUE, color = "magenta") +
+  geom_point(size = 2) +
+  
+  labs(title = "Soil_Water vs Abundance (By Site)", x = "Soil_Water", y = "Abundance") +
+  theme_minimal()
+
+```
+
+``` {r, Variable Jitter Plots}
+
+ggplot(JBPlotsStats, aes(x = Land_Use_History, y = Abundance, color = USGS_Cat)) +
+  scale_color_manual(values = c("0" = "blue", "1" = "red", "2" = "yellow", "3" = "green")) +
+  geom_jitter(width = 0.1, size = 2) +
+  labs(x = "Land_Use_History", y = "Abundance", title = "Land_Use_History vs Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Land_Use_History, y = Abundance, color = SiteID)) +
+  scale_color_manual(values = c("GMF" = "blue", "MGR" = "red", "YMF" = "yellow", "YNP" = "green")) +
+  geom_jitter(width = 0.1, size = 2) +
+  labs(x = "Land_Use_History", y = "Abundance", title = "Land_Use_History vs Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Road_Proximity, y = Abundance, color = USGS_Cat)) +
+  scale_color_manual(values = c("0" = "blue", "1" = "red", "2" = "yellow", "3" = "green")) +
+  geom_jitter(width = 0.1, size = 2) +
+  labs(x = "Road_Proximity", y = "Abundance", title = "Road_Proximity vs Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Road_Proximity, y = Abundance, color = SiteID)) +
+  scale_color_manual(values = c("GMF" = "blue", "MGR" = "red", "YMF" = "yellow", "YNP" = "green")) +
+  geom_jitter(width = 0.1, size = 2) +
+  labs(x = "Road_Proximity", y = "Abundance", title = "Road_Proximity vs Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Soil_Farm_Class, y = Abundance, color = USGS_Cat)) +
+  scale_color_manual(values = c("0" = "blue", "1" = "red", "2" = "yellow", "3" = "green")) +
+  geom_jitter(width = 0.1, size = 2) +
+  labs(x = "Soil_Farm_Class", y = "Abundance", title = "Soil_Farm_Class vs Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Soil_Farm_Class, y = Abundance, color = SiteID)) +
+  scale_color_manual(values = c("GMF" = "blue", "MGR" = "red", "YMF" = "yellow", "YNP" = "green")) +
+  geom_jitter(width = 0.1, size = 2) +
+  labs(x = "Soil_Farm_Class", y = "Abundance", title = "Soil_Farm_Class vs Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Water_Proximity, y = Abundance, color = USGS_Cat)) +
+  scale_color_manual(values = c("0" = "blue", "1" = "red", "2" = "yellow", "3" = "green")) +
+  geom_jitter(width = 0.1, size = 2) +
+  labs(x = "Water_Proximity", y = "Abundance", title = "Water_Proximity vs Abundance") +
+  theme_minimal()
+
+ggplot(JBPlotsStats, aes(x = Water_Proximity, y = Abundance, color = SiteID)) +
+  scale_color_manual(values = c("GMF" = "blue", "MGR" = "red", "YMF" = "yellow", "YNP" = "green")) +
+  geom_jitter(width = 0.1, size = 2) +
+  labs(x = "Water_Proximity", y = "Abundance", title = "Water_Proximity vs Abundance") +
+  theme_minimal()
+
+```
+
+``` {r, Correlation Matrices - All Variables (17)}
+
+JB_Abundance_Numerical <- JBPlotsStats
+JB_Abundance_Numerical$Land_Use_History <- as.numeric(as.character(JB_Abundance_Numerical$Land_Use_History))
+JB_Abundance_Numerical$Road_Proximity_Cat <- as.numeric(as.character(JB_Abundance_Numerical$Road_Proximity_Cat))
+JB_Abundance_Numerical$Soil_Farm_Class <- as.numeric(as.character(JB_Abundance_Numerical$Soil_Farm_Class))
+JB_Abundance_Numerical$Water_Proximity_Cat <- as.numeric(as.character(JB_Abundance_Numerical$Water_Proximity_Cat))
+  
+
+JB_Abundance_Numerical <- JB_Abundance_Numerical %>% dplyr::select(
+                                       "Land_Use_History",
+                                       "Aspect",
+                                       "Road_Proximity_Cat",
+                                       "Road_Proximity_Cont",
+                                       "Soil_Farm_Class",
+                                       "Soil_Hydric_Rating",
+                                       "Water_Proximity_Cat",
+                                       "Water_Proximity_Cont",
+                                       "Elevation",
+                                       "LST_Day",
+                                       "LST_Night",
+                                       "TMAX",
+                                       "TMIN",
+                                       "NDVI",
+                                       "Precipitation",
+                                       "Humidity",
+                                       "Slope",
+                                       "Soil_Water")
+
+#Raw Covariances
+JB_cov_matrix <- cov(JB_Abundance_Numerical)
+print(JB_cov_matrix)
+chart.Correlation(JB_Abundance_Numerical, histogram = TRUE, method = "pearson")
+
+#Relative Correlations
+JB_cor_matrix <- cor(JB_Abundance_Numerical)
+print(JB_cor_matrix)
+JB_Correlation_Matrix <- as.data.table(JB_cor_matrix)
+
+JB_Correlation_Matrix_Melt <- as.data.table(JB_cor_matrix, keep.rownames = "Var1")
+
+JB_Correlation_Melt <- melt(
+  JB_Correlation_Matrix_Melt,
+  id.vars = "Var1",
+  variable.name = "Var2",
+  value.name = "Correlation"
+)
+
+ggplot(JB_Correlation_Melt, aes(Var1, Var2, fill = Correlation)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ggtitle("Correlation Matrix Heatmap")
+
+
+rm(JB_cor_matrix, JB_Abundance_Numerical, JB_cov_matrix, JB_Correlation_Melt, JB_Correlation_Matrix, JB_Correlation_Matrix_Melt)
+
+```
+
+``` {r, Covariance Matrices - L1 Selected Variables (10)}
+
+JB_Abundance_Numerical <- JBPlotsStats
+JB_Abundance_Numerical$Land_Use_History <- as.numeric(as.character(JB_Abundance_Numerical$Land_Use_History))
+JB_Abundance_Numerical$Road_Proximity <- as.numeric(as.character(JB_Abundance_Numerical$Road_Proximity))
+JB_Abundance_Numerical$Soil_Farm_Class <- as.numeric(as.character(JB_Abundance_Numerical$Soil_Farm_Class))
+JB_Abundance_Numerical$Water_Proximity <- as.numeric(as.character(JB_Abundance_Numerical$Water_Proximity))
+  
+
+JB_Abundance_Numerical <- JB_Abundance_Numerical %>% dplyr::select(
+                                       "Land_Use_History",
+                                       "Road_Proximity",
+                                       "Soil_Farm_Class",
+                                       "Soil_Hydric_Rating",
+                                       "Water_Proximity",
+                                       "NDVI",
+                                       "Precipitation",
+                                       "Humidity",
+                                       "Slope",
+                                       "Soil_Water")
+
+#Relative Correlations
+JB_cor_matrix <- cor(JB_Abundance_Numerical)
+print(JB_cor_matrix)
+JB_Correlation_Matrix <- as.data.table(JB_cor_matrix)
+
+JB_Correlation_Matrix_Melt <- as.data.table(JB_cor_matrix, keep.rownames = "Var1")
+
+JB_Correlation_Melt <- melt(
+  JB_Correlation_Matrix_Melt,
+  id.vars = "Var1",
+  variable.name = "Var2",
+  value.name = "Correlation"
+)
+
+ggplot(JB_Correlation_Melt, aes(Var1, Var2, fill = Correlation)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ggtitle("Correlation Matrix Heatmap")
+
+
+rm(JB_cor_matrix, JB_Abundance_Numerical, JB_cov_matrix, JB_Correlation_Melt, JB_Correlation_Matrix, JB_Correlation_Matrix_Melt)
+
+```
+
+``` {r, Covariance Matrices - L2 Selected Variables (7)}
+
+JB_Abundance_Numerical <- JBPlotsStats
+JB_Abundance_Numerical$Land_Use_History <- as.numeric(as.character(JB_Abundance_Numerical$Land_Use_History))
+JB_Abundance_Numerical$Road_Proximity <- as.numeric(as.character(JB_Abundance_Numerical$Road_Proximity))
+JB_Abundance_Numerical$Soil_Farm_Class <- as.numeric(as.character(JB_Abundance_Numerical$Soil_Farm_Class))
+JB_Abundance_Numerical$Water_Proximity <- as.numeric(as.character(JB_Abundance_Numerical$Water_Proximity))
+  
+
+JB_Abundance_Numerical <- JB_Abundance_Numerical %>% dplyr::select(
+                                       "Abundance",
+                                        "Land_Use_History",
+                                        "Road_Proximity",
+                                        "Soil_Farm_Class",
+                                        "Soil_Hydric_Rating",
+                                        "Water_Proximity",
+                                        "NDVI",
+                                        "Soil_Water")
+
+#Relative Correlations
+JB_cor_matrix <- cor(JB_Abundance_Numerical)
+print(JB_cor_matrix)
+JB_Correlation_Matrix <- as.data.table(JB_cor_matrix)
+
+JB_Correlation_Matrix_Melt <- as.data.table(JB_cor_matrix, keep.rownames = "Var1")
+
+JB_Correlation_Melt <- melt(
+  JB_Correlation_Matrix_Melt,
+  id.vars = "Var1",
+  variable.name = "Var2",
+  value.name = "Correlation"
+)
+
+ggplot(JB_Correlation_Melt, aes(Var1, Var2, fill = Correlation)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ggtitle("Correlation Matrix Heatmap")
+
+
+rm(JB_cor_matrix, JB_Abundance_Numerical, JB_cov_matrix, JB_Correlation_Melt, JB_Correlation_Matrix, JB_Correlation_Matrix_Melt)
+
+```
+
+###################################################################################
+
+https://chatgpt.com/s/t_690b6a63869481919821439e4ba4443e
+
+https://www.datacamp.com/doc/r/glm
+
+``` {r, Occurrence GLM Prep}
+
+JB_Occurrence_GLM_Stats <- JBPlotsStats %>% dplyr::select("Occurrence",
+                                                   "Land_Use_History",
+                                                   "Road_Proximity_Cont",
+                                                   "Soil_Farm_Class",
+                                                   "Soil_Hydric_Rating",
+                                                   "Water_Proximity",
+                                                   "NDVI",
+                                                   "Soil_Water")
+
+ggplot(JB_Occurrence_GLM_Stats, aes(x = Occurrence)) + geom_bar(fill = "firebrick1", color = "black")
+ggplot(JB_Occurrence_GLM_Stats, aes(x = Land_Use_History)) + geom_bar(fill = "firebrick1", color = "black")
+ggplot(JB_Occurrence_GLM_Stats, aes(x = Road_Proximity_Cont)) + geom_bar(fill = "firebrick1", color = "black")
+ggplot(JB_Occurrence_GLM_Stats, aes(x = Soil_Farm_Class)) + geom_bar(fill = "firebrick1", color = "black")
+ggplot(JB_Occurrence_GLM_Stats, aes(x = Soil_Hydric_Rating)) + geom_histogram(fill = "lightblue", color = "black")
+ggplot(JB_Occurrence_GLM_Stats, aes(x = Water_Proximity)) + geom_bar(fill = "firebrick1", color = "black")
+ggplot(JB_Occurrence_GLM_Stats, aes(x = NDVI)) + geom_histogram(fill = "lightblue", color = "black")
+ggplot(JB_Occurrence_GLM_Stats, aes(x = Soil_Water)) + geom_histogram(fill = "lightblue", color = "black")
+
+```
+
+``` {r, Occurrence GLM (Binomial)}
+
+JB_Occurrence_GLM_Stats <- JBPlotsStats %>% dplyr::select("Occurrence",
+                                                   "Land_Use_History",
+                                                   "Road_Proximity_Cont",
+                                                   "Soil_Farm_Class",
+                                                   "Soil_Hydric_Rating",
+                                                   "Water_Proximity",
+                                                   "NDVI",
+                                                   "Soil_Water")
+
+JB_Occurrence_GLM <- glm(Occurrence ~ Land_Use_History +
+                                      Road_Proximity_Cont +
+                                      Soil_Farm_Class +
+                                      Soil_Hydric_Rating +
+                                      Water_Proximity +
+                                      NDVI +
+                                      Soil_Water,
+                      data = JB_Occurrence_GLM_Stats,
+                      family = binomial)
+
+summary(JB_Occurrence_GLM)
+JB_Occurrence_GLM_Summary <- summary(JB_Occurrence_GLM)
+JB_Occurrence_GLM.pvals <- as.data.frame(coef(JB_Occurrence_GLM_Summary))
+View(JB_Occurrence_GLM.pvals)
+
+plot(JB_Occurrence_GLM, which = 1)
+plot(JB_Occurrence_GLM, which = 2)
+plot(JB_Occurrence_GLM, which = 3)
+plot(JB_Occurrence_GLM, which = 4)
+
+# Significant Variable p-values:
+# - (Intercept):                 0.08357 .
+# - Road_Proximity.L:            6e-05 ***
+# - Soil_Hydric_Rating:          0.01145 * 
+# - Soil_Water:                  0.00504 ** 
+
+# Significance codes:  
+# - 0 ***
+# - 0.001 **
+# - 0.01 *
+# - 0.05 .
+# - 0.1  
+# - 1
+
+# Chi-Square Statistic
+# Null deviance: 311.46  on 228  degrees of freedom
+# Residual deviance: 264.47  on 214  degrees of freedom
+# 311.46 - 264.47 = 46.99 = X^2
+# P-value: 0.000019
+
+# AIC: 294.47
+
+rm(JB_Occurrence_GLM, JB_Occurrence_GLM_Stats, JB_Occurrence_GLM_Summary, JB_Occurrence_GLM.pvals)
+
+```
+
+``` {r, Categorical GLM Prep}
+
+JB_Categorical_GLM_Stats <- JBPlotsStats %>% dplyr::select("GT_Cat",
+                                                   "Land_Use_History",
+                                                   "Road_Proximity",
+                                                   "Soil_Farm_Class",
+                                                   "Soil_Hydric_Rating",
+                                                   "Water_Proximity",
+                                                   "NDVI",
+                                                   "Soil_Water")
+
+ggplot(JB_Categorical_GLM_Stats, aes(x = GT_Cat)) + geom_bar(fill = "firebrick1", color = "black")
+ggplot(JB_Categorical_GLM_Stats, aes(x = Land_Use_History)) + geom_bar(fill = "firebrick1", color = "black")
+ggplot(JB_Categorical_GLM_Stats, aes(x = Road_Proximity)) + geom_bar(fill = "firebrick1", color = "black")
+ggplot(JB_Categorical_GLM_Stats, aes(x = Soil_Farm_Class)) + geom_bar(fill = "firebrick1", color = "black")
+ggplot(JB_Categorical_GLM_Stats, aes(x = Soil_Hydric_Rating)) + geom_histogram(fill = "lightblue", color = "black")
+ggplot(JB_Categorical_GLM_Stats, aes(x = Water_Proximity)) + geom_bar(fill = "firebrick1", color = "black")
+ggplot(JB_Categorical_GLM_Stats, aes(x = NDVI)) + geom_histogram(fill = "lightblue", color = "black")
+ggplot(JB_Categorical_GLM_Stats, aes(x = Soil_Water)) + geom_histogram(fill = "lightblue", color = "black")
+
+```
+
+https://chatgpt.com/s/t_690b6e379bc08191a99699ce34b72c02
+
+``` {r, Categorical GLM (Proportional Odds Logistic Regression)}
+
+JB_Categorical_GLM_Stats <- JBPlotsStats %>% dplyr::select("GT_Cat",
+                                                   "Land_Use_History",
+                                                   "Road_Proximity_Cont",
+                                                   "Soil_Farm_Class",
+                                                   "Soil_Hydric_Rating",
+                                                   "Water_Proximity",
+                                                   "NDVI",
+                                                   "Soil_Water")
+
+JB_Categorical_GLM <- polr(GT_Cat ~ Land_Use_History +
+                                    Road_Proximity_Cont +
+                                    Soil_Farm_Class +
+                                    Soil_Hydric_Rating +
+                                    Water_Proximity +
+                                    NDVI +
+                                    Soil_Water,
+                      data = JB_Categorical_GLM_Stats,
+                      method = "logistic")
+
+summary(JB_Categorical_GLM)
+JB_Categorical_GLM_Summary <- summary(JB_Categorical_GLM)
+JB_Categorical_GLM.pvals <- as.data.frame(coef(JB_Categorical_GLM_Summary))
+
+tvals <- JB_Categorical_GLM.pvals$`t value`
+df_resid <- 12
+pvals <- 2 * (1 - pt(abs(tvals), df = df_resid))
+JB_Categorical_GLM.pvals$pvals <- cbind(pvals)
+RowHeaders <- tibble(RowHeader = c("Land_Use_History2", "Land_Use_History3 ", "Land_Use_History4", "Road_Proximity_Cont", "Soil_Farm_Class.L", "Soil_Farm_Class.Q", "Soil_Hydric_Rating", "Water_Proximity.L", "Water_Proximity.Q", "Water_Proximity.C", "NDVI", "Soil_Water", "0|1", "1|2", "2|3"))
+JB_Categorical_GLM.pvals <- cbind(NewCol = RowHeaders, JB_Categorical_GLM.pvals)
+View(JB_Categorical_GLM.pvals)
+
+# Significant Variable p-values:
+# Land_Use_History2:              2.353673e-14	 ***	
+# Land_Use_History3:              2.004503e-04	 ***	
+# Land_Use_History4:              3.285995e-03	 **	
+# Road_Proximity.L:               6.709502e-05	 ***	
+# Road_Proximity.Q:               3.086298e-02   .
+# Soil_Farm_Class.L:              1.270035e-02	 .	
+# Soil_Farm_Class.Q:              4.659225e-03	 **	
+# Soil_Hydric_Rating:             6.352507e-03	 **	
+# Water_Proximity.L:              6.887214e-02   .
+# Water_Proximity.Q:              1.260866e-02   .		
+# Water_Proximity.C:              9.360161e-02	 .	
+# Soil_Water:	                    2.806055e-03	 **
+
+# Significance codes:  
+# e-4 - 0 ***
+# e-3 - 0.001 **
+# e-2 - 0.01 *
+# e-2 - 0.05 .
+# e-1 - 0.1  
+# e0  - 1
+
+# Chi-Square Statistic
+# Residual Deviance: 492.9977 
+p_value <- 1 - pchisq(492.9977, df = 12)
+round(p_value, 6)
+p_value
+# P-value: 0.000000
+
+# AIC: 526.9977 
+
+rm(JB_Categorical_GLM, JB_Categorical_GLM_Stats, JB_Categorical_GLM_Summary, JB_Categorical_GLM.pvals, tvals, pvals, df_resid, JB_Categorical_GLM.pvals, p_value, RowHeaders)
+
+```
+
+``` {r, Abundance GLM Prep}
+
+JB_Abundance_GLM_Stats <- JBPlotsStats %>% dplyr::select("Abundance",
+                                        "Land_Use_History",
+                                        "Road_Proximity",
+                                        "Soil_Farm_Class",
+                                        "Soil_Hydric_Rating",
+                                        "Water_Proximity",
+                                        "NDVI",
+                                        "Soil_Water")
+
+ggplot(JB_Abundance_GLM_Stats, aes(x = Abundance)) + geom_histogram(fill = "lightblue", color = "black")
+ggplot(JB_Abundance_GLM_Stats, aes(x = Land_Use_History)) + geom_bar(fill = "firebrick1", color = "black")
+ggplot(JB_Abundance_GLM_Stats, aes(x = Road_Proximity)) + geom_bar(fill = "firebrick1", color = "black")
+ggplot(JB_Abundance_GLM_Stats, aes(x = Soil_Farm_Class)) + geom_bar(fill = "firebrick1", color = "black")
+ggplot(JB_Abundance_GLM_Stats, aes(x = Soil_Hydric_Rating)) + geom_histogram(fill = "lightblue", color = "black")
+ggplot(JB_Abundance_GLM_Stats, aes(x = Water_Proximity)) + geom_bar(fill = "firebrick1", color = "black")
+ggplot(JB_Abundance_GLM_Stats, aes(x = NDVI)) + geom_histogram(fill = "lightblue", color = "black")
+ggplot(JB_Abundance_GLM_Stats, aes(x = Soil_Water)) + geom_histogram(fill = "lightblue", color = "black")
+
+```
+
+``` {r, Abundance GLM (Gaussian)}
+
+JB_Abundance_GLM_Stats <- JBPlotsStats %>% dplyr::select("Abundance",
+                                        "Land_Use_History",
+                                        "Road_Proximity_Cont",
+                                        "Soil_Farm_Class",
+                                        "Soil_Hydric_Rating",
+                                        "Water_Proximity",
+                                        "NDVI",
+                                        "Soil_Water")
+
+JB_Abundance_GLM <- glm(Abundance ~ Land_Use_History +
+                                    Road_Proximity_Cont +
+                                    Soil_Farm_Class +
+                                    Soil_Hydric_Rating +
+                                    Water_Proximity +
+                                    NDVI +
+                                    Soil_Water,
+                      data = JB_Abundance_GLM_Stats,
+                      family = gaussian)
+
+summary(JB_Abundance_GLM)
+JB_Abundance_GLM_Summary <- summary(JB_Abundance_GLM)
+JB_Abundance_GLM.pvals <- as.data.frame(coef(JB_Abundance_GLM_Summary))
+View(JB_Abundance_GLM.pvals)
+
+plot(JB_Abundance_GLM, which = 1)
+plot(JB_Abundance_GLM, which = 2)
+plot(JB_Abundance_GLM, which = 3)
+plot(JB_Abundance_GLM, which = 4)
+
+# Significant Variable p-values:
+# - N/A
+
+# Significance codes:  
+# - 0 ***
+# - 0.001 **
+# - 0.01 *
+# - 0.05 .
+# - 0.1  
+# - 1
+
+# Chi-Square Statistic
+# Null deviance: 5168176 on 228  degrees of freedom
+# Residual deviance: 4902733 on 214  degrees of freedom
+# 5168176 - 4902733 = 265443 = X^2
+# P-value: 0.000000
+
+# AIC: 2965.4
+
+rm(JB_Abundance_GLM, JB_Abundance_GLM_Stats, JB_Abundance_GLM_Summary, JB_Abundance_GLM.pvals)
+
+```
+
+Questions regarding model evaluation.
+
+https://chatgpt.com/s/t_68ddafe4b3948191935e7927d4a2a253
+
+``` {r, RandomForest Occurrence Modeling}
+
+JB_Occurrence_Model_Data <- JBPlotsStats[, -7:-11]
+JB_Occurrence_Model_Data <- na.omit(JB_Occurrence_Model_Data)
+
+View(JB_Occurrence_Model_Data)
+table(JB_Occurrence_Model_Data$GT_Cat)
+
+# ggpairs(JB_Occurrence_Model_Data, columns = c(14:25,27))
+
+set.seed(265)
+
+JB_Occurrence_Model_Data$id <- 1:nrow(JB_Occurrence_Model_Data)
+
+JB_Occurrence_Model_Data_train <- JB_Occurrence_Model_Data %>% dplyr::ungroup() %>% dplyr::sample_frac(0.80)
+JB_Occurrence_Model_Data_test  <- dplyr::anti_join(JB_Occurrence_Model_Data, JB_Occurrence_Model_Data_train, by = 'id')
+
+JB_Occurrence_Model.rf <- randomForest(Occurrence ~ Land_Use_History +
+                                      Road_Proximity +
+                                      Soil_Farm_Class +
+                                      Soil_Hydric_Rating +
+                                      Water_Proximity +
+                                      NDVI +
+                                      Soil_Water, 
+                          data = JB_Occurrence_Model_Data_train,
+                          keep.forest = T,
+                          importance = TRUE, 
+                          mtry = 1,
+                          ntree = 500,
+                          keep.inbag=TRUE)
+
+plot(JB_Occurrence_Model.rf, lwd = 2, col = c("black", "red", "green"))
+legend("topleft",
+       legend = c("OOB Error", levels(JB_Occurrence_Model.rf$y)),
+       col = c("black", "red", "green"),
+       lty = 1, cex = 0.8)
+
+importance(JB_Occurrence_Model.rf) 
+varImpPlot(JB_Occurrence_Model.rf)
+
+
+JB_Occurrence_Model_Data_train$PREDICT <- predict(JB_Occurrence_Model.rf, JB_Occurrence_Model_Data_train)
+ggplot() + geom_point( data = JB_Occurrence_Model_Data_train, aes( x=Occurrence, y= PREDICT )) +
+  geom_smooth(method='lm')
+summary(glm(data=JB_Occurrence_Model_Data_train, PREDICT~Occurrence, family = binomial))
+
+JB_Occurrence_Model_Data.train.summary <-summary(glm(data=JB_Occurrence_Model_Data_train, PREDICT~Occurrence, family = binomial))
+JB_Occurrence_Model_Data.train.pvals <- as.data.frame(coef(JB_Occurrence_Model_Data.train.summary))
+View(JB_Occurrence_Model_Data.train.pvals)
+
+
+
+JB_Occurrence_Model_Data_test$PREDICT <- predict(JB_Occurrence_Model.rf, JB_Occurrence_Model_Data_test)
+ggplot() + geom_point( data = JB_Occurrence_Model_Data_test, aes( x=Occurrence, y= PREDICT )) +
+  geom_smooth(method='lm')
+summary(glm(data=JB_Occurrence_Model_Data_test,  PREDICT~Occurrence, family = binomial))
+
+JB_Occurrence_Model_Data.test.summary <- summary(glm(data=JB_Occurrence_Model_Data_test, PREDICT~Occurrence, family = binomial))
+JB_Occurrence_Model_Data.test.pvals <- as.data.frame(coef(JB_Occurrence_Model_Data.test.summary))
+View(JB_Occurrence_Model_Data.test.pvals)
+
+save.image("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/RStudio/JB_Occurrence_Model_RDATA")
+
+rm(JB_Occurrence_Model_Data, JB_Occurrence_Model_Data_train, JB_Occurrence_Model_Data_test, JB_Occurrence_Model.rf, JB_Occurrence_Model_Data.train.summary, JB_Occurrence_Model_Data.train.pvals, JB_Occurrence_Model_Data.test.summary, JB_Occurrence_Model_Data.test.pvals)
+
+```
+
+``` {r, RandomForest Categorical Modeling}
+
+JB_Categorical_Model_Data <- JBPlotsStats[, -7:-11]
+JB_Categorical_Model_Data <- na.omit(JB_Categorical_Model_Data)
+
+View(JB_Categorical_Model_Data)
+table(JB_Categorical_Model_Data$GT_Cat)
+
+# ggpairs(JB_Occurrence_Model_Data, columns = c(14:25,27))
+
+set.seed(265)
+
+JB_Categorical_Model_Data$id <- 1:nrow(JB_Categorical_Model_Data)
+
+JB_Categorical_Model_Data_train <- JB_Categorical_Model_Data %>% dplyr::ungroup() %>% dplyr::sample_frac(0.80)
+JB_Categorical_Model_Data_test  <- dplyr::anti_join(JB_Categorical_Model_Data, JB_Categorical_Model_Data_train, by = 'id')
+
+JB_Categorical_Model.rf <- randomForest(GT_Cat ~ Land_Use_History +
+                                      Road_Proximity +
+                                      Soil_Farm_Class +
+                                      Soil_Hydric_Rating +
+                                      Water_Proximity +
+                                      NDVI +
+                                      Soil_Water, 
+                          data = JB_Categorical_Model_Data_train,
+                          keep.forest = T,
+                          importance = TRUE, 
+                          mtry = 1,
+                          ntree = 500,
+                          keep.inbag=TRUE)
+
+plot(JB_Categorical_Model.rf, lwd = 2, col = c("black", "blue", "red", "yellow2", "green"))
+legend("topleft",
+       legend = c("OOB Error", levels(JB_Categorical_Model.rf$y)),
+       col = c("black", "blue", "red", "yellow2", "green"),
+       lty = 1, cex = 0.8)
+
+importance(JB_Categorical_Model.rf) 
+varImpPlot(JB_Categorical_Model.rf)
+
+
+JB_Categorical_Model_Data_train$PREDICT <- predict(JB_Categorical_Model.rf, JB_Categorical_Model_Data_train)
+ggplot() + geom_point( data = JB_Categorical_Model_Data_train, aes( x=GT_Cat, y= PREDICT )) +
+  geom_smooth(method='lm')
+summary(polr(data=JB_Categorical_Model_Data_train, PREDICT~GT_Cat, method = "logistic"))
+
+JB_Categorical_Model_Summary.train <- summary(polr(data=JB_Categorical_Model_Data_train, PREDICT~GT_Cat, method = "logistic"))
+JB_Categorical_Model.train.pvals <- as.data.frame(coef(JB_Categorical_Model_Summary.train))
+
+tvals1 <- JB_Categorical_Model.train.pvals$`t value`
+df_resid <- 6
+pvals1 <- 2 * (1 - pt(abs(tvals1), df = df_resid))
+JB_Categorical_Model.train.pvals$pvals1 <- cbind(pvals1)
+RowHeaders1 <- tibble(RowHeader = c("GT_Cat.L", "GT_Cat.Q", "GT_Cat.C", "0|1", "1|2", "2|3"))
+JB_Categorical_Model.train.pvals <- cbind(NewCol = RowHeaders1, JB_Categorical_Model.train.pvals)
+View(JB_Categorical_Model.train.pvals)
+
+
+
+JB_Categorical_Model_Data_test$PREDICT <- predict(JB_Categorical_Model.rf, JB_Categorical_Model_Data_test)
+ggplot() + geom_point( data = JB_Categorical_Model_Data_test, aes( x=GT_Cat, y= PREDICT )) +
+  geom_smooth(method='lm')
+summary(polr(data=JB_Categorical_Model_Data_test,  PREDICT~GT_Cat, method = "logistic"))
+
+JB_Categorical_Model_Summary.test <- summary(polr(data=JB_Categorical_Model_Data_test, PREDICT~GT_Cat, method = "logistic"))
+JB_Categorical_Model.test.pvals <- as.data.frame(coef(JB_Categorical_Model_Summary.test))
+
+tvals2 <- JB_Categorical_Model.test.pvals$`t value`
+df_resid <- 6
+pvals2 <- 2 * (1 - pt(abs(tvals2), df = df_resid))
+JB_Categorical_Model.test.pvals$pvals2 <- cbind(pvals2)
+RowHeaders1 <- tibble(RowHeader = c("GT_Cat.L", "GT_Cat.Q", "GT_Cat.C", "0|1", "1|2", "2|3"))
+JB_Categorical_Model.test.pvals <- cbind(NewCol = RowHeaders1, JB_Categorical_Model.test.pvals)
+View(JB_Categorical_Model.test.pvals)
+
+save.image("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/RStudio/JB_Categorical_Model_RDATA")
+
+rm(JB_Categorical_Model_Data, JB_Categorical_Model_Data_train, JB_Categorical_Model_Data_test, JB_Categorical_Model.rf, JB_Categorical_Model_Summary.train, JB_Categorical_Model.train.pvals, tvals1, pvals1, JB_Categorical_Model_Summary.test, JB_Categorical_Model.test.pvals, tvals2, pvals2, df_resid, RowHeaders1, RowHeaders2)
+
+```
+
+``` {r, RandomForest Abundance Modeling}
+
+JB_Abundance_Model_Data <- JBPlotsStats[, -7:-10]
+JB_Abundance_Model_Data <- na.omit(JB_Abundance_Model_Data)
+
+View(JB_Abundance_Model_Data)
+table(JB_Abundance_Model_Data$GT_Cat)
+
+# ggpairs(JB_Abundance_Model_Data, columns = c(14:25,27))
+
+set.seed(684)
+
+JB_Abundance_Model_Data$id <- 1:nrow(JB_Abundance_Model_Data)
+
+JB_Abundance_Model_Data_train <- JB_Abundance_Model_Data %>% dplyr::ungroup() %>% dplyr::sample_frac(0.50)
+JB_Abundance_Model_Data_test  <- dplyr::anti_join(JB_Abundance_Model_Data, JB_Abundance_Model_Data_train, by = 'id')
+
+JB_Abundance_Model.rf <- randomForest(Abundance ~
+                                      Road_Proximity_Cont +
+                                      Soil_Farm_Class +
+                                      NDVI +
+                                      Soil_Water,
+                          data = JB_Abundance_Model_Data_train,
+                          keep.forest = T,
+                          importance = TRUE, 
+                          mtry = 1,
+                          ntree = 500,
+                          keep.inbag=TRUE)
+
+plot(JB_Abundance_Model.rf)
+importance(JB_Abundance_Model.rf) 
+varImpPlot(JB_Abundance_Model.rf)
+
+
+JB_Abundance_Model_Data_train$PREDICT <- predict(JB_Abundance_Model.rf, JB_Abundance_Model_Data_train)
+ggplot() + geom_point( data = JB_Abundance_Model_Data_train, aes( x=Abundance, y= PREDICT )) +
+  geom_smooth(method='lm')
+summary(lm(data=JB_Abundance_Model_Data_train, PREDICT~Abundance))
+
+JB_Abundance_Model.train.summary <- summary(lm(data=JB_Abundance_Model_Data_train, PREDICT~Abundance))
+JB_Abundance_Model.train.pvals <- as.data.frame(coef(JB_Abundance_Model.train.summary))
+View(JB_Abundance_Model.train.pvals)
+
+
+
+JB_Abundance_Model_Data_test$PREDICT <- predict(JB_Abundance_Model.rf, JB_Abundance_Model_Data_test)
+ggplot() + geom_point( data = JB_Abundance_Model_Data_test, aes( x=Abundance, y= PREDICT )) +
+  geom_smooth(method='lm')
+summary(lm(data=JB_Abundance_Model_Data_test,  PREDICT~Abundance))
+
+JB_Abundance_Model.test.summary <- summary(lm(data=JB_Abundance_Model_Data_test, PREDICT~Abundance))
+JB_Abundance_Model.test.pvals <- as.data.frame(coef(JB_Abundance_Model.test.summary))
+View(JB_Abundance_Model.test.pvals)
+
+save.image("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/RStudio/JB_Abundance_Model_RDATA")
+
+rm(JB_Abundance_Model_Data, JB_Abundance_Model_Data_train, JB_Abundance_Model_Data_test, JB_Abundance_Model.rf, JB_Abundance_Model.train.summary, JB_Abundance_Model.train.pvals, JB_Abundance_Model.test.summary, JB_Abundance_Model.test.pvals)
+
+```
+
+``` {r, Save RDATA}
+
+save.image("C:/Users/km2695/YSE Dropbox/Kellen Moore/Kellen Thesis/Data & Code/RStudio/JB_Statistics_RDATA")
+
+```
